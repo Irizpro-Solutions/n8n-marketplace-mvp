@@ -1,61 +1,71 @@
-import { NextRequest, NextResponse } from "next/server";
-import Razorpay from "razorpay";
-import { supabaseServer } from "@/lib/supabase/server";
+// src/app/api/razorpay/create-order/route.ts
+import Razorpay from 'razorpay';
+import { NextResponse } from 'next/server';
+import { supabaseServer } from '@/lib/supabase/server';
 
-const razor = new Razorpay({
+const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID!,
   key_secret: process.env.RAZORPAY_KEY_SECRET!,
 });
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    // 1. Get logged-in user
+    const { packageId, amount, credits } = await req.json();
+
+    if (!packageId || !amount || !credits) {
+      return NextResponse.json(
+        { error: 'Missing packageId, amount or credits' },
+        { status: 400 }
+      );
+    }
+
     const supabase = await supabaseServer();
     const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-    if (userError || !user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    if (sessionError || !session?.user) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    // 2. Parse body
-    const { credits } = (await req.json()) as { credits: number };
+    const userId = session.user.id;
+    const userEmail = session.user.email ?? '';
 
-    if (!credits || credits <= 0) {
-      return NextResponse.json({ error: "Invalid credits" }, { status: 400 });
-    }
-
-    // ₹3 per credit → Razorpay expects paise
-    const amountInPaise = credits * 3 * 100;
-
-    // 3. Create Razorpay order
-    const order = await razor.orders.create({
-      amount: amountInPaise,
-      currency: "INR",
-      receipt: `cred_${user.id}_${Date.now()}`,
+    // 1) Create Razorpay order
+    const order = await razorpay.orders.create({
+      amount: Math.round(amount * 100),
+      currency: 'INR',
+      receipt: `cp_${packageId}_${Date.now()}`, // < 40 chars
       notes: {
-        user_id: user.id,
+        user_id: userId,
+        user_email: userEmail,
+        package_id: packageId,
         credits: String(credits),
       },
     });
 
-    // 4. Return order details to frontend
-    return NextResponse.json(
-      {
-        orderId: order.id,
-        amount: order.amount,
-        currency: order.currency,
-        razorpayKeyId: process.env.RAZORPAY_KEY_ID,
-      },
-      { status: 200 },
-    );
+    // 2) Store PENDING purchase mapped to this user
+    const { error: dbError } = await supabase.from('credit_purchases').insert({
+      user_id: userId,
+      package_id: packageId,
+      razorpay_order_id: order.id,
+      amount,
+      credits,
+      status: 'pending', // you can use enum or text
+    });
+
+    if (dbError) {
+      console.error('Failed to insert credit_purchases', dbError);
+      // still let user pay, but log it
+    }
+
+    return NextResponse.json({ orderId: order.id });
   } catch (err) {
-    console.error("Razorpay create-order error:", err);
+    console.error('create-order route error:', err);
     return NextResponse.json(
-      { error: "Failed to create order" },
-      { status: 500 },
+      { error: 'Failed to create Razorpay order' },
+      { status: 500 }
     );
   }
 }

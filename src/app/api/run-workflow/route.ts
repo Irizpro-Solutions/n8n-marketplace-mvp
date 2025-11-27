@@ -1,70 +1,69 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { runN8nWorkflow } from "@/lib/n8n-client"; // your helper
+import { runN8nWorkflow } from "@/lib/n8n-client";
 
 export async function POST(req: Request) {
   try {
     const { workflowId, inputs } = await req.json();
 
     const supabase = await supabaseServer();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    // 1) get logged-in user
-    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Not logged in" }, { status: 401 });
     }
 
-    // 2) fetch workflow row by UUID
-    const { data: workflow, error } = await supabase
+    // 1) get workflow from Supabase by UUID (your app’s workflow id)
+    const { data: workflow, error: wfErr } = await supabase
       .from("workflows")
       .select("*")
       .eq("id", workflowId)
-      .eq("is_active", true)
       .single();
 
-    if (error || !workflow) {
+    if (wfErr || !workflow) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
     }
 
-    // 3) make sure n8n_workflow_id exists
-    if (!workflow.n8n_workflow_id) {
-      return NextResponse.json(
-        { error: "n8n workflow id missing in DB" },
-        { status: 400 }
-      );
-    }
-
-    // 4) check credits
+    // 2) get user credits row
     const { data: userRow } = await supabase
       .from("users")
-      .select("credits")
+      .select("*")
       .eq("id", user.id)
       .single();
 
-    const credits = userRow?.credits ?? 0;
-    if (credits < workflow.credit_cost) {
+    if (!userRow) {
+      return NextResponse.json({ error: "User profile missing" }, { status: 400 });
+    }
+
+    if (userRow.credits < workflow.credit_cost) {
       return NextResponse.json(
         { error: "Not enough credits to run this workflow" },
         { status: 402 }
       );
     }
 
-    // 5) call n8n using slug
-    const n8nResult = await runN8nWorkflow(
-      workflow.n8n_workflow_id,
-      inputs
-    );
-
-    // 6) deduct credits
+    // 3) deduct credits
     await supabase
       .from("users")
-      .update({ credits: credits - workflow.credit_cost })
+      .update({ credits: userRow.credits - workflow.credit_cost })
       .eq("id", user.id);
 
-    return NextResponse.json({ success: true, data: n8nResult });
+    // 4) run n8n workflow using stored n8n_workflow_id
+    const n8nResult = await runN8nWorkflow(workflow.n8n_workflow_id, inputs);
 
-  } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    // 5) save execution
+    await supabase.from("executions").insert({
+      user_id: user.id,
+      workflow_id: workflow.id,
+      status: "success",
+      result: n8nResult,
+    });
+
+    return NextResponse.json({ result: n8nResult });
+  } catch (e:any) {
+    console.error(e);
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
