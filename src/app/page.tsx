@@ -138,32 +138,7 @@ export default function Home() {
                     </p>
                   </div>
                 </Link>
-
-                {/* Login Card */}
-                <Link href="/auth/login" className="group block">
-                  <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-lg p-6 backdrop-blur-sm transition-all duration-300 group-hover:border-purple-400/60 group-hover:shadow-[0_0_30px_rgba(147,51,234,0.3)]">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-mono text-xl font-bold text-white">./login</h3>
-                      <div className="text-purple-400 group-hover:translate-x-1 transition-transform">→</div>
-                    </div>
-                    <p className="text-gray-400 text-sm font-mono">
-                      Access your dashboard & start running workflows
-                    </p>
-                  </div>
-                </Link>
-
-                {/* Credits Card */}
-                {/* <Link href="/credits" className="group block">
-                  <div className="bg-gradient-to-r from-pink-500/10 to-orange-500/10 border border-pink-500/30 rounded-lg p-6 backdrop-blur-sm transition-all duration-300 group-hover:border-pink-400/60 group-hover:shadow-[0_0_30px_rgba(236,72,153,0.3)]">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-mono text-xl font-bold text-white">./buy_credits</h3>
-                      <div className="text-pink-400 group-hover:translate-x-1 transition-transform">→</div>
-                    </div>
-                    <p className="text-gray-400 text-sm font-mono">
-                      Purchase execution credits • Starting from ₹1
-                    </p>
-                  </div>
-                </Link> */}
+ 
               </div>
 
               {/* Stats display */}

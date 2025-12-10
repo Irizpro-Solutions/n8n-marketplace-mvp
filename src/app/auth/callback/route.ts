@@ -5,8 +5,9 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const next = searchParams.get('next') ?? '/dashboard'
+  const type = searchParams.get('type') // email verification, password reset, etc.
 
-  console.log('Callback route hit with code:', code) // Debug log
+  console.log('Callback route hit:', { code: !!code, type, next }) // Debug log
 
   if (code) {
     try {
@@ -15,23 +16,21 @@ export async function GET(request: NextRequest) {
       // Exchange the code for a session
       const { data, error } = await supabase.auth.exchangeCodeForSession(code)
       
-      console.log('Exchange code result:', { data, error }) // Debug log
+      console.log('Exchange code result:', { data: !!data, error }) // Debug log
       
       if (!error && data.user) {
         console.log('User verified successfully:', data.user.id)
         
-        // Verify the user is in the auth.users table
-        const { data: userData, error: userError } = await supabase
-          .from('auth.users')
-          .select('*')
-          .eq('id', data.user.id)
-          .single()
-        
-        console.log('User lookup result:', { userData, userError })
-        
-        // Redirect to dashboard on success
-        const redirectUrl = new URL(next, origin)
-        return NextResponse.redirect(redirectUrl.toString())
+        // Handle different callback types
+        if (type === 'recovery') {
+          // Password reset flow
+          console.log('Password reset callback - redirecting to reset form')
+          return NextResponse.redirect(`${origin}/auth/reset-password`)
+        } else {
+          // Regular email verification or login
+          console.log('Regular verification - redirecting to:', next)
+          return NextResponse.redirect(`${origin}${next}`)
+        }
       } else {
         console.error('Email verification failed:', error)
         const redirectUrl = new URL('/auth/auth-code-error', origin)
