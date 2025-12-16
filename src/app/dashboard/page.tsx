@@ -37,6 +37,8 @@ export default function Dashboard() {
   const [executionData, setExecutionData] = useState<ExecutionForm>({})
   // New state variables for improved execution handling
   const [executionLoading, setExecutionLoading] = useState(false)
+  const [executionProgress, setExecutionProgress] = useState(0)
+  const [executionStatus, setExecutionStatus] = useState('')
   const [executionResult, setExecutionResult] = useState<any>(null)
   const [executionError, setExecutionError] = useState<string | null>(null)
   const router = useRouter()
@@ -117,7 +119,39 @@ export default function Dashboard() {
       return
     }
 
+    const executionId = `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    setExecutionLoading(true)
+    setExecutionResult(null)
+    setExecutionError(null)
+    setExecutionProgress(0)
+    setExecutionStatus('Starting workflow...')
     setExecutingAgent(agentId)
+
+    // Set up SSE connection
+    const eventSource = new EventSource(`/api/execution-progress/${executionId}`)
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      
+      if (data.error) {
+        setExecutionError(data.error)
+        setExecutionLoading(false)
+        eventSource.close()
+      } else {
+        setExecutionProgress(data.progress || 0)
+        setExecutionStatus(data.status || 'Processing...')
+        
+        if (data.progress === 100 || data.status === 'completed') {
+          setExecutionResult(data.result || { message: 'Workflow completed successfully' })
+          setExecutionLoading(false)
+          eventSource.close()
+        }
+      }
+    }
+
+    eventSource.onerror = () => {
+      eventSource.close()
+    }
 
     try {
       // Validate required fields
@@ -142,13 +176,16 @@ export default function Dashboard() {
           user_id: user?.id,
           agent_id: agent.id,
           inputs: executionData,
-          execution_id: `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+          execution_id: `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          progress_webhook: `${window.location.origin}/api/execution-progress/${executionId}`
         }),
       })
 
       if (!response.ok) {
         throw new Error(`Webhook execution failed: ${response.statusText}`)
       }
+
+      
 
       const result = await response.json()
       
@@ -183,6 +220,9 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error executing agent:', error)
       alert(`Execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setExecutionError(error instanceof Error ? error.message : 'Unknown error')
+      setExecutionLoading(false)
+      eventSource.close()
     } finally {
       setExecutingAgent(null)
       setShowExecutionForm(null)
@@ -382,13 +422,26 @@ export default function Dashboard() {
             })()}
             
             <div className="flex space-x-4 mt-6">
+            {executionLoading ? (
+              <div className="text-center py-6">
+                <div className="w-full bg-gray-700 rounded-full h-3 mb-4">
+                  <div 
+                    className="bg-cyan-500 h-3 rounded-full transition-all duration-500" 
+                    style={{ width: `${executionProgress}%` }}
+                  ></div>
+                </div>
+                <div className="text-cyan-400 font-bold">{executionStatus}</div>
+                <div className="text-cyan-200 text-sm mt-2">{executionProgress}% Complete</div>
+              </div>
+            ) : (
               <button
                 onClick={() => handleExecutionFormSubmit(showExecutionForm, purchasedAgents.some(a => a.id === showExecutionForm))}
                 disabled={executingAgent === showExecutionForm}
                 className="flex-1 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 text-black font-bold border border-green-400 transition-colors"
               >
-                {executingAgent === showExecutionForm ? 'EXECUTING...' : '🚀 EXECUTE AGENT'}
+                🚀 EXECUTE AGENT
               </button>
+            )}
               
               <button
                 onClick={() => {
