@@ -59,7 +59,10 @@ export default function AuthCodeErrorPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-black text-green-400 font-mono flex items-center justify-center">
-        <div className="text-center">Loading...</div>
+        <div className="text-center">
+          <div className="animate-pulse text-2xl mb-4">◉ LOADING ◉</div>
+          <div className="text-sm">Loading error details...</div>
+        </div>
       </div>
     }>
       <AuthErrorContent />

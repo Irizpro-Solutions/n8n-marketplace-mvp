@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-export default function SignupPage() {
+function SignupContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
@@ -159,5 +159,20 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black text-green-400 font-mono flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-pulse text-2xl mb-4">◉ LOADING SIGNUP ◉</div>
+          <div className="text-sm">Initializing registration...</div>
+        </div>
+      </div>
+    }>
+      <SignupContent />
+    </Suspense>
   )
 }
