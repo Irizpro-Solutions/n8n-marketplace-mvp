@@ -1,8 +1,9 @@
-// src/app/api/execution-progress/[executionId]/route.ts
+// Updated src/app/api/execution-progress/[executionId]/route.ts
+// This version fixes the CORS issues
+
 import { NextRequest, NextResponse } from 'next/server'
 
-// Store progress connections in memory
-// In production, you'd want to use Redis or similar
+// Simple in-memory store for SSE connections
 const progressConnections = new Map<string, ReadableStreamDefaultController>()
 
 export async function GET(
@@ -10,26 +11,27 @@ export async function GET(
   { params }: { params: Promise<{ executionId: string }> }
 ) {
   const { executionId } = await params
+  console.log(`SSE connection requested for execution: ${executionId}`)
 
-  // Set up Server-Sent Events stream
   const encoder = new TextEncoder()
   
   const customReadable = new ReadableStream({
     start(controller) {
-      // Store this controller for sending updates
+      console.log(`Storing SSE controller for execution: ${executionId}`)
       progressConnections.set(executionId, controller)
       
-      // Send initial connection message
+      // Send connection confirmation
       const data = `data: ${JSON.stringify({ 
-        message: 'Connected to execution progress stream',
+        message: 'Progress stream connected',
         executionId,
-        timestamp: new Date().toISOString()
+        progress: 0,
+        status: 'connected'
       })}\n\n`
       
       controller.enqueue(encoder.encode(data))
     },
     cancel() {
-      // Clean up when client disconnects
+      console.log(`SSE connection closed for execution: ${executionId}`)
       progressConnections.delete(executionId)
     }
   })
@@ -40,8 +42,9 @@ export async function GET(
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+      'Access-Control-Allow-Credentials': 'true',
     },
   })
 }
@@ -54,27 +57,27 @@ export async function POST(
     const { executionId } = await params
     const body = await request.json()
     
-    // Extract progress data from n8n
+    console.log(`📊 Progress update received for ${executionId}:`, body)
+
     const { 
       progress = 0, 
       status = 'processing', 
-      message = '', 
+      message = '',
       error = null,
       result = null
     } = body
 
-    console.log(`Progress update for ${executionId}:`, { progress, status, message })
-
-    // Find the SSE connection for this execution
+    // Find the SSE connection
     const controller = progressConnections.get(executionId)
     
     if (controller) {
-      // Send progress update to the connected client
+      console.log(`✅ Sending progress to UI: ${progress}% - ${status}`)
+      
       const encoder = new TextEncoder()
       const progressData = {
-        progress,
+        progress: Number(progress),
         status,
-        message,
+        message: message || status,
         error,
         result,
         executionId,
@@ -86,49 +89,73 @@ export async function POST(
       try {
         controller.enqueue(encoder.encode(data))
         
-        // If execution is complete, close the connection
+        // Close connection when complete
         if (status === 'completed' || status === 'error' || progress >= 100) {
+          console.log(`🏁 Execution ${executionId} completed, closing connection`)
           setTimeout(() => {
-            controller.close()
+            try {
+              controller.close()
+            } catch (e) {
+              console.log('Controller already closed')
+            }
             progressConnections.delete(executionId)
-          }, 1000) // Small delay to ensure message is sent
+          }, 2000)
         }
+        
       } catch (streamError) {
-        console.error('Error sending to stream:', streamError)
-        // Clean up dead connection
+        console.error('❌ Error sending to SSE stream:', streamError)
         progressConnections.delete(executionId)
       }
     } else {
-      console.log(`No active connection found for execution ${executionId}`)
+      console.log(`⚠️ No SSE connection found for execution ${executionId}`)
+      console.log(`Active connections: ${Array.from(progressConnections.keys()).join(', ')}`)
     }
 
-    return NextResponse.json({ 
+    // Return response with CORS headers
+    return new NextResponse(JSON.stringify({ 
       success: true, 
-      message: 'Progress update received',
+      message: 'Progress update processed',
       executionId,
-      connectionsActive: progressConnections.size
+      activeConnections: progressConnections.size,
+      connectionExists: !!controller
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+        'Access-Control-Allow-Credentials': 'true',
+      },
     })
 
   } catch (error) {
-    console.error('Error handling progress update:', error)
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+    console.error('❌ Error in progress POST handler:', error)
+    
+    return new NextResponse(JSON.stringify({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    }), {
+      status: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+        'Access-Control-Allow-Credentials': 'true',
       },
-      { status: 500 }
-    )
+    })
   }
 }
 
-// Handle OPTIONS for CORS
 export async function OPTIONS(request: NextRequest) {
   return new NextResponse(null, {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+      'Access-Control-Allow-Credentials': 'true',
     },
   })
 }
