@@ -109,126 +109,133 @@ export default function Dashboard() {
     }
   }
 
-  const handleExecutionFormSubmit = async (agentId: string, isUserAgent: boolean = true) => {
-    const agent = isUserAgent 
-      ? purchasedAgents.find(a => a.id === agentId)?.agent
-      : allAgents.find(a => a.id === agentId)
+  // Updated section for src/app/dashboard/page.tsx
+// Replace the existing handleExecutionFormSubmit function with this:
 
-    if (!agent?.webhook_url) {
-      alert('This agent is not configured for execution yet.')
-      return
-    }
+const handleExecutionFormSubmit = async (agentId: string, isUserAgent: boolean = true) => {
+  const agent = isUserAgent 
+    ? purchasedAgents.find(a => a.id === agentId)?.agent
+    : allAgents.find(a => a.id === agentId)
 
-    const executionId = `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    setExecutionLoading(true)
-    setExecutionResult(null)
-    setExecutionError(null)
-    setExecutionProgress(0)
-    setExecutionStatus('Starting workflow...')
-    setExecutingAgent(agentId)
+  if (!agent?.webhook_url) {
+    alert('This agent is not configured for execution yet.')
+    return
+  }
 
-    // Set up SSE connection
-    const eventSource = new EventSource(`/api/execution-progress/${executionId}`)
+  // Generate unique execution ID
+  const executionId = `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  
+  setExecutionLoading(true)
+  setExecutionResult(null)
+  setExecutionError(null)
+  setExecutionProgress(0)
+  setExecutionStatus('Initializing workflow...')
+  setExecutingAgent(agentId)
 
-    eventSource.onmessage = (event) => {
+  // Set up Server-Sent Events connection for progress updates
+  const eventSource = new EventSource(
+    `${window.location.origin}/api/execution-progress/${executionId}`
+  )
+
+  eventSource.onmessage = (event) => {
+    try {
       const data = JSON.parse(event.data)
+      console.log('Progress update received:', data)
       
       if (data.error) {
         setExecutionError(data.error)
         setExecutionLoading(false)
         eventSource.close()
-      } else {
-        setExecutionProgress(data.progress || 0)
-        setExecutionStatus(data.status || 'Processing...')
+      } else if (data.result) {
+        setExecutionResult(data.result)
+        setExecutionStatus('Workflow completed successfully!')
+        setExecutionProgress(100)
+        setExecutionLoading(false)
+        eventSource.close()
         
-        if (data.progress === 100 || data.status === 'completed') {
-          setExecutionResult(data.result || { message: 'Workflow completed successfully' })
-          setExecutionLoading(false)
-          eventSource.close()
+        // Show success result
+        showExecutionResult(data.result, agent.name)
+      } else {
+        // Update progress
+        if (data.progress !== undefined) {
+          setExecutionProgress(data.progress)
+        }
+        if (data.status) {
+          setExecutionStatus(data.status)
+        }
+        if (data.message) {
+          setExecutionStatus(data.message)
         }
       }
-    }
-
-    eventSource.onerror = () => {
-      eventSource.close()
-    }
-
-    try {
-      // Validate required fields
-      const inputSchema = agent.input_schema || []
-      const missingRequired = inputSchema
-        .filter((field: any) => field.required && !executionData[field.name])
-        .map((field: any) => field.label)
-
-      if (missingRequired.length > 0) {
-        alert(`Please fill in required fields: ${missingRequired.join(', ')}`)
-        setExecutingAgent(null)
-        return
-      }
-
-      // Call n8n webhook with user inputs
-      const response = await fetch(agent.webhook_url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: user?.id,
-          agent_id: agent.id,
-          inputs: executionData,
-          execution_id: `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          progress_webhook: `${window.location.origin}/api/execution-progress/${executionId}`
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Webhook execution failed: ${response.statusText}`)
-      }
-
-      
-
-      const result = await response.json()
-      
-      // Deduct credits for non-admin users
-      if (!isAdmin && isUserAgent) {
-        const userAgent = purchasedAgents.find(a => a.id === agentId)
-        if (userAgent && userAgent.remaining_credits > 0) {
-          const { error } = await supabase
-            .from('user_agents')
-            .update({ remaining_credits: userAgent.remaining_credits - 1 })
-            .eq('id', agentId)
-
-          if (!error) {
-            await loadPurchasedAgents()
-          }
-        }
-      }
-
-      // Log execution
-      await supabase
-        .from('agent_executions')
-        .insert({
-          user_id: user?.id,
-          agent_id: agent.id,
-          execution_result: JSON.stringify(result),
-          status: 'completed'
-        })
-
-      // Show success message with result
-      showExecutionResult(result, agent.name)
-      
-    } catch (error) {
-      console.error('Error executing agent:', error)
-      alert(`Execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      setExecutionError(error instanceof Error ? error.message : 'Unknown error')
-      setExecutionLoading(false)
-      eventSource.close()
-    } finally {
-      setExecutingAgent(null)
-      setShowExecutionForm(null)
-      setExecutionData({})
+    } catch (parseError) {
+      console.error('Error parsing progress data:', parseError)
     }
   }
+
+  eventSource.onerror = (error) => {
+    console.error('SSE connection error:', error)
+    eventSource.close()
+    
+    // Don't set error state immediately - workflow might still be running
+    // Only set error if we haven't received any progress updates
+    setTimeout(() => {
+      if (executionProgress === 0) {
+        setExecutionError('Connection to progress updates failed')
+        setExecutionLoading(false)
+      }
+    }, 5000)
+  }
+
+  try {
+    // Validate required fields
+    const inputSchema = agent.input_schema || []
+    const missingRequired = inputSchema
+      .filter((field: any) => field.required && !executionData[field.name])
+      .map((field: any) => field.label)
+
+    if (missingRequired.length > 0) {
+      alert(`Please fill in required fields: ${missingRequired.join(', ')}`)
+      setExecutingAgent(null)
+      setExecutionLoading(false)
+      eventSource.close()
+      return
+    }
+
+    // Call n8n webhook with execution ID for progress tracking
+    const response = await fetch(agent.webhook_url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: user?.id,
+        agent_id: agent.id,
+        inputs: executionData,
+        execution_id: executionId,
+        progress_webhook_url: `${window.location.origin}/api/execution-progress/${executionId}`
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Webhook execution failed: ${response.statusText}`)
+    }
+
+    console.log('Workflow initiated successfully, waiting for progress updates...')
+
+    // The workflow will now send progress updates via HTTP POST to our API
+    // The SSE connection above will receive those updates and update the UI
+
+  } catch (error) {
+    console.error('Error executing agent:', error)
+    setExecutionError(error instanceof Error ? error.message : 'Unknown error')
+    setExecutionLoading(false)
+    eventSource.close()
+  } finally {
+    setExecutingAgent(null)
+    setShowExecutionForm(null)
+    setExecutionData({})
+  }
+}
 
   const showExecutionResult = (result: any, agentName: string) => {
     // Create a modal or notification to show the result
