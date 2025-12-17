@@ -111,6 +111,8 @@ export default function Dashboard() {
 
   // Updated section for src/app/dashboard/page.tsx
 // Replace the existing handleExecutionFormSubmit function with this:
+// Replace the handleExecutionFormSubmit function in src/app/dashboard/page.tsx
+// This fixes the UI state resetting too quickly
 
 const handleExecutionFormSubmit = async (agentId: string, isUserAgent: boolean = true) => {
   const agent = isUserAgent 
@@ -125,65 +127,94 @@ const handleExecutionFormSubmit = async (agentId: string, isUserAgent: boolean =
   // Generate unique execution ID
   const executionId = `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   
+  console.log(`🚀 Starting execution ${executionId} for agent:`, agent.name)
+
+  // Set loading state - DON'T reset until actually complete
   setExecutionLoading(true)
   setExecutionResult(null)
   setExecutionError(null)
   setExecutionProgress(0)
-  setExecutionStatus('Initializing workflow...')
+  setExecutionStatus('Connecting to progress stream...')
   setExecutingAgent(agentId)
 
-  // Set up Server-Sent Events connection for progress updates
+  let hasReceivedProgress = false
+  let executionCompleted = false
+
+  // Set up Server-Sent Events connection FIRST
+  console.log(`📡 Connecting to SSE: /api/execution-progress/${executionId}`)
+  
   const eventSource = new EventSource(
     `${window.location.origin}/api/execution-progress/${executionId}`
   )
 
+  eventSource.onopen = () => {
+    console.log('✅ SSE connection established')
+    setExecutionStatus('Progress stream connected...')
+  }
+
   eventSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data)
-      console.log('Progress update received:', data)
+      console.log('📊 Progress update received:', data)
       
+      hasReceivedProgress = true
+
       if (data.error) {
+        console.error('❌ Execution error received:', data.error)
         setExecutionError(data.error)
         setExecutionLoading(false)
+        setExecutingAgent(null)
+        executionCompleted = true
         eventSource.close()
-      } else if (data.result) {
-        setExecutionResult(data.result)
+        
+      } else if (data.result || data.status === 'completed' || data.progress >= 100) {
+        console.log('✅ Execution completed with result')
+        
+        if (data.result) {
+          setExecutionResult(data.result)
+          showExecutionResult(data.result, agent.name)
+        }
+        
         setExecutionStatus('Workflow completed successfully!')
         setExecutionProgress(100)
         setExecutionLoading(false)
+        setExecutingAgent(null)
+        executionCompleted = true
         eventSource.close()
         
-        // Show success result
-        showExecutionResult(data.result, agent.name)
       } else {
-        // Update progress
-        if (data.progress !== undefined) {
+        // Regular progress update
+        if (data.progress !== undefined && data.progress >= 0) {
+          console.log(`📈 Progress: ${data.progress}%`)
           setExecutionProgress(data.progress)
         }
-        if (data.status) {
-          setExecutionStatus(data.status)
-        }
-        if (data.message) {
-          setExecutionStatus(data.message)
+        if (data.status || data.message) {
+          const statusMsg = data.message || data.status || 'Processing...'
+          console.log(`📝 Status: ${statusMsg}`)
+          setExecutionStatus(statusMsg)
         }
       }
     } catch (parseError) {
-      console.error('Error parsing progress data:', parseError)
+      console.error('❌ Error parsing progress data:', parseError, event.data)
     }
   }
 
   eventSource.onerror = (error) => {
-    console.error('SSE connection error:', error)
-    eventSource.close()
+    console.error('❌ SSE connection error:', error)
     
-    // Don't set error state immediately - workflow might still be running
-    // Only set error if we haven't received any progress updates
-    setTimeout(() => {
-      if (executionProgress === 0) {
-        setExecutionError('Connection to progress updates failed')
-        setExecutionLoading(false)
-      }
-    }, 5000)
+    if (!executionCompleted) {
+      // Only show error if we haven't completed and haven't received any progress
+      setTimeout(() => {
+        if (!hasReceivedProgress && !executionCompleted) {
+          console.log('⚠️ No progress received, showing connection error')
+          setExecutionError('Lost connection to progress updates')
+          setExecutionLoading(false)
+          setExecutingAgent(null)
+        }
+      }, 10000) // Wait 10 seconds before giving up
+    }
+    
+    eventSource.close()
   }
 
   try {
@@ -201,40 +232,74 @@ const handleExecutionFormSubmit = async (agentId: string, isUserAgent: boolean =
       return
     }
 
+    console.log('📤 Sending workflow execution request...')
+    setExecutionStatus('Starting workflow execution...')
+
     // Call n8n webhook with execution ID for progress tracking
+    const webhookPayload = {
+      user_id: user?.id,
+      agent_id: agent.id,
+      inputs: executionData,
+      execution_id: executionId,
+      progress_webhook_url: `${window.location.origin}/api/execution-progress/${executionId}`
+    }
+
+    console.log('📤 Webhook payload:', webhookPayload)
+
     const response = await fetch(agent.webhook_url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        user_id: user?.id,
-        agent_id: agent.id,
-        inputs: executionData,
-        execution_id: executionId,
-        progress_webhook_url: `${window.location.origin}/api/execution-progress/${executionId}`
-      }),
+      body: JSON.stringify(webhookPayload),
     })
 
     if (!response.ok) {
-      throw new Error(`Webhook execution failed: ${response.statusText}`)
+      throw new Error(`Webhook execution failed: ${response.status} ${response.statusText}`)
     }
 
-    console.log('Workflow initiated successfully, waiting for progress updates...')
+    console.log('✅ Webhook called successfully, waiting for progress updates...')
+    setExecutionStatus('Workflow initiated, processing...')
 
-    // The workflow will now send progress updates via HTTP POST to our API
-    // The SSE connection above will receive those updates and update the UI
+    // Deduct credits for non-admin users
+    if (!isAdmin && isUserAgent) {
+      const userAgent = purchasedAgents.find(a => a.id === agentId)
+      if (userAgent && userAgent.remaining_credits > 0) {
+        const { error } = await supabase
+          .from('user_agents')
+          .update({ remaining_credits: userAgent.remaining_credits - 1 })
+          .eq('id', agentId)
+
+        if (!error) {
+          await loadPurchasedAgents()
+          console.log('💳 Credits deducted successfully')
+        }
+      }
+    }
+
+    // Log execution start
+    await supabase
+      .from('agent_executions')
+      .insert({
+        user_id: user?.id,
+        agent_id: agent.id,
+        execution_result: JSON.stringify({ status: 'started', execution_id: executionId }),
+        status: 'running'
+      })
+
+    // DON'T reset state here - let the progress updates handle it
+    console.log('🎯 Execution setup complete, monitoring progress...')
 
   } catch (error) {
-    console.error('Error executing agent:', error)
+    console.error('❌ Error executing agent:', error)
     setExecutionError(error instanceof Error ? error.message : 'Unknown error')
     setExecutionLoading(false)
-    eventSource.close()
-  } finally {
     setExecutingAgent(null)
-    setShowExecutionForm(null)
-    setExecutionData({})
+    eventSource.close()
   }
+
+  // DON'T reset form state here - do it only when execution truly completes
+  // The SSE handlers above will manage the state properly
 }
 
   const showExecutionResult = (result: any, agentName: string) => {
