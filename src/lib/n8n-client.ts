@@ -1,3 +1,5 @@
+// Fixed src/lib/n8n-client.ts
+
 type N8nWorkflow = {
   id: string | number;
   name: string;
@@ -5,11 +7,22 @@ type N8nWorkflow = {
   tags?: any[];
 };
 
-const N8N_API_URL = process.env.N8N_API_URL!;
-const N8N_API_KEY = process.env.N8N_API_KEY!;
+// Create helper function to check environment variables
+function validateN8nConfig() {
+  const N8N_API_URL = process.env.N8N_API_URL;
+  const N8N_API_KEY = process.env.N8N_API_KEY;
+
+  if (!N8N_API_URL || !N8N_API_KEY) {
+    throw new Error('N8N_API_URL and N8N_API_KEY environment variables are required');
+  }
+
+  return { N8N_API_URL, N8N_API_KEY };
+}
 
 // helper
 async function n8nFetch(path: string, options: RequestInit = {}) {
+  const { N8N_API_URL, N8N_API_KEY } = validateN8nConfig();
+
   const res = await fetch(`${N8N_API_URL}${path}`, {
     ...options,
     headers: {
@@ -42,4 +55,16 @@ export async function runN8nWorkflow(n8nWorkflowId: string | number, inputs: any
     method: "POST",
     body: JSON.stringify({ input: inputs }),
   });
+}
+
+// Create a factory function for n8n client if needed
+export function createN8nClient() {
+  const { N8N_API_URL, N8N_API_KEY } = validateN8nConfig();
+  
+  return {
+    apiUrl: N8N_API_URL,
+    apiKey: N8N_API_KEY,
+    fetchWorkflows: fetchN8nWorkflows,
+    runWorkflow: runN8nWorkflow,
+  };
 }

@@ -1,6 +1,32 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { runN8nWorkflow } from "@/lib/n8n-client";
+
+// Create a function to call n8n workflow instead of importing a client
+async function callN8nWorkflow(n8nWorkflowId: string | number, inputs: any) {
+  const N8N_API_URL = process.env.N8N_API_URL;
+  const N8N_API_KEY = process.env.N8N_API_KEY;
+
+  if (!N8N_API_URL || !N8N_API_KEY) {
+    throw new Error("N8N configuration is missing");
+  }
+
+  const res = await fetch(`${N8N_API_URL}/api/v1/workflows/${n8nWorkflowId}/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-N8N-API-KEY": N8N_API_KEY,
+    },
+    body: JSON.stringify({ input: inputs }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`n8n API error ${res.status}: ${txt}`);
+  }
+
+  return res.json();
+}
 
 export async function POST(req: Request) {
   try {
@@ -15,7 +41,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Not logged in" }, { status: 401 });
     }
 
-    // 1) get workflow from Supabase by UUID (your app’s workflow id)
+    // 1) get workflow from Supabase by UUID (your app's workflow id)
     const { data: workflow, error: wfErr } = await supabase
       .from("workflows")
       .select("*")
@@ -51,7 +77,7 @@ export async function POST(req: Request) {
       .eq("id", user.id);
 
     // 4) run n8n workflow using stored n8n_workflow_id
-    const n8nResult = await runN8nWorkflow(workflow.n8n_workflow_id, inputs);
+    const n8nResult = await callN8nWorkflow(workflow.n8n_workflow_id, inputs);
 
     // 5) save execution
     await supabase.from("executions").insert({
@@ -62,7 +88,7 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ result: n8nResult });
-  } catch (e:any) {
+  } catch (e: any) {
     console.error(e);
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

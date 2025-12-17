@@ -1,14 +1,25 @@
-// src/lib/supabase/admin.ts
+// Fixed src/lib/supabase/admin.ts
 import { createClient } from "@supabase/supabase-js";
 
-export const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
+// Create a function to get admin client instead of top-level initialization
+export function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Missing SUPABASE environment variables');
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
     auth: {
       persistSession: false,
     },
-  }
-);
+  });
+}
 
-export default supabaseAdmin;
+// Export for backward compatibility
+export const supabaseAdmin = {
+  getInstance: getSupabaseAdmin
+};
+
+export default getSupabaseAdmin;

@@ -26,7 +26,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Get authenticated user
+    // Get authenticated user - Initialize supabase inside handler
     const supabase = await supabaseServer();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 

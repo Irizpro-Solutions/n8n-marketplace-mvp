@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { supabaseAdmin } from '@/lib/supabase/supabaseAdmin';
+import { createClient } from '@supabase/supabase-js';
 
 export const POST = async (req: NextRequest) => {
+  // Initialize Supabase admin client inside the handler to avoid build-time execution
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        persistSession: false,
+      },
+    }
+  );
+
   // 1) Read raw body for signature verification
   const rawBody = await req.text();
   const signature = req.headers.get('x-razorpay-signature') || '';
