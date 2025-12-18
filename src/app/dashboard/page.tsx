@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
+import { AgentDeploymentForm } from '@/components/admin/AgentPricingForm'
+
 
 interface PurchasedAgent {
   id: string
@@ -742,6 +744,17 @@ const handleExecutionFormSubmit = async (agentId: string, isUserAgent: boolean =
             </div>
           </div>
         )}
+        {isAdmin && (
+          <div className="mb-8">
+            <div className="bg-gray-900 border-2 border-yellow-500 rounded-lg p-6">
+              <h2 className="text-2xl text-yellow-400 font-bold mb-4 text-center">
+                ◉ ADMIN - CREATE NEW AGENT ◉
+              </h2>
+              <AgentDeploymentForm />
+            </div>
+          </div>
+        )}
+        
 
         {/* User's Purchased Agents */}
         <div className="mb-8">

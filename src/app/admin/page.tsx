@@ -5,6 +5,12 @@ import { createBrowserClient } from '@supabase/ssr'
 import { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 
+// Import proper interfaces
+interface PricingConfig {
+  basePrice: number
+  customPrices: { [currency: string]: number }
+}
+
 interface Agent {
   id: string
   name: string
@@ -17,6 +23,7 @@ interface Agent {
   is_active: boolean
   created_at: string
   updated_at: string
+  pricing_config?: PricingConfig
 }
 
 interface FormField {
@@ -40,17 +47,22 @@ export default function AdminPanel() {
   const [formFields, setFormFields] = useState<FormField[]>([])
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null)
   const [showEditForm, setShowEditForm] = useState(false)
-  const [forceUpdate, setForceUpdate] = useState(0) // Force re-renders
+  const [forceUpdate, setForceUpdate] = useState(0)
   const router = useRouter()
 
-  // Form state
+  // Form state - FIXED TYPING
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    credit_cost: 1,
     category: '',
     webhook_url: '',
     is_active: true
+  })
+
+  // FIXED: Proper pricing state typing
+  const [agentPricing, setAgentPricing] = useState<PricingConfig>({
+    basePrice: 50,
+    customPrices: {}
   })
 
   const supabase = createBrowserClient(
@@ -62,14 +74,10 @@ export default function AdminPanel() {
     checkAdmin()
     loadAgents()
     
-    // Set up real-time subscription
     const cleanup = setupRealtimeSubscription()
-    
-    // Cleanup on unmount
     return cleanup
   }, [])
 
-  // Force re-render when forceUpdate changes
   useEffect(() => {
     if (forceUpdate > 0) {
       console.log('UI force updated:', forceUpdate)
@@ -88,7 +96,6 @@ export default function AdminPanel() {
         },
         (payload) => {
           console.log('Real-time agent update:', payload)
-          // Force immediate reload of agents
           loadAgents()
         }
       )
@@ -118,7 +125,6 @@ export default function AdminPanel() {
       if (error) throw error
       setAgents(data || [])
       
-      // Force UI re-render
       setForceUpdate(prev => prev + 1)
       
       console.log('Agents loaded:', data?.length || 0)
@@ -218,944 +224,625 @@ export default function AdminPanel() {
       }))
   }
 
+  const fillSampleData = () => {
+    setFormData({
+      name: 'SEO Content Analyzer',
+      description: 'Analyzes your website content and provides SEO recommendations to improve search engine rankings.',
+      category: 'SEO',
+      webhook_url: 'https://n8n.irizpro.com/webhook/your-webhook-id',
+      is_active: true
+    })
+    
+    setAgentPricing({
+      basePrice: 50,
+      customPrices: {
+        USD: 0.99,
+        AED: 3.99
+      }
+    })
+
+    setRequiresInputs(true)
+    setFormFields([
+      {
+        id: 'field_1',
+        name: 'website_url',
+        type: 'url',
+        label: 'Website URL',
+        placeholder: 'https://your-website.com',
+        required: true
+      },
+      {
+        id: 'field_2',
+        name: 'target_keywords',
+        type: 'textarea',
+        label: 'Target Keywords',
+        placeholder: 'Enter your target keywords, one per line',
+        required: true
+      }
+    ])
+  }
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      description: '',
+      category: '',
+      webhook_url: '',
+      is_active: true
+    })
+    setAgentPricing({
+      basePrice: 50,
+      customPrices: {}
+    })
+    setRequiresInputs(false)
+    setFormFields([])
+    setShowForm(false)
+  }
+
+  // FIXED: Proper pricing change handler
+  const handlePricingChange = (newPricing: PricingConfig) => {
+    setAgentPricing(newPricing)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Use edit submit if editing an agent
-    if (editingAgent) {
-      return handleEditSubmit(e)
+    if (!formData.name.trim() || !formData.description.trim() || !formData.category.trim()) {
+      alert('Please fill in all required fields')
+      return
     }
-    
-    setSubmitting(true)
+
+    if (!formData.webhook_url.trim()) {
+      alert('Webhook URL is required')
+      return
+    }
 
     try {
-      // Validate form fields if inputs are required
-      if (requiresInputs) {
-        const validFields = formFields.filter(field => field.name.trim() && field.label.trim())
-        if (validFields.length === 0) {
-          alert('Please add at least one input field or uncheck "requires user inputs"')
-          setSubmitting(false)
-          return
-        }
-      }
+      setSubmitting(true)
 
-      const inputSchema = requiresInputs ? generateInputSchema() : null
+      const inputSchema = requiresInputs ? generateInputSchema() : []
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('agents')
-        .insert([{
-          ...formData,
-          input_schema: inputSchema
-        }])
+        .insert({
+          name: formData.name.trim(),
+          description: formData.description.trim(),
+          category: formData.category.trim(),
+          webhook_url: formData.webhook_url.trim(),
+          is_active: formData.is_active,
+          input_schema: inputSchema,
+          credit_cost: agentPricing.basePrice,
+          pricing_config: agentPricing
+        })
+        .select()
 
       if (error) throw error
 
-      // Force immediate reload of agents list
-      await loadAgents()
-
-      // Reset form
-      setFormData({
-        name: '',
-        description: '',
-        credit_cost: 1,
-        category: '',
-        webhook_url: '',
-        is_active: true
-      })
-      setRequiresInputs(false)
-      setFormFields([])
-      setShowForm(false)
+      console.log('Agent created successfully:', data)
+      alert('✅ Agent deployed to marketplace successfully!')
       
-      showNotification('Agent deployed successfully!', 'success')
+      resetForm()
+      await loadAgents()
+      
     } catch (error) {
-      console.error('Error adding agent:', error)
-      showNotification('Error deploying agent. Please try again.', 'error')
+      console.error('Error creating agent:', error)
+      alert(`❌ Failed to deploy agent: ${error instanceof Error ? error.message : 'Unknown error'}`)
     } finally {
       setSubmitting(false)
     }
   }
 
-  const toggleAgentStatus = async (agentId: string, currentStatus: boolean) => {
-    setActionLoading(agentId)
-    
-    try {
-      const { error } = await supabase
-        .from('agents')
-        .update({ 
-          is_active: !currentStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', agentId)
-
-      if (error) throw error
-
-      // Force immediate reload of agents list
-      await loadAgents()
-      
-      showNotification(
-        `Agent ${!currentStatus ? 'activated' : 'deactivated'} successfully!`, 
-        'success'
-      )
-    } catch (error) {
-      console.error('Error updating agent status:', error)
-      showNotification('Error updating agent status.', 'error')
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const editAgent = (agent: Agent) => {
+  const startEdit = (agent: Agent) => {
     setEditingAgent(agent)
     setFormData({
       name: agent.name,
       description: agent.description,
-      credit_cost: agent.credit_cost,
       category: agent.category,
       webhook_url: agent.webhook_url || '',
       is_active: agent.is_active
     })
     
-    // Load existing input schema
-    if (agent.input_schema && agent.input_schema.length > 0) {
-      setRequiresInputs(true)
-      setFormFields(agent.input_schema.map((field: any, index: number) => ({
-        id: `existing_${index}_${Date.now()}`,
-        name: field.name,
-        type: field.type,
-        label: field.label,
-        placeholder: field.placeholder || '',
-        required: field.required || false,
-        options: field.options || (field.type === 'select' || field.type === 'radio' ? [''] : undefined)
-      })))
-    } else {
-      setRequiresInputs(false)
-      setFormFields([])
-    }
+    setAgentPricing(agent.pricing_config || {
+      basePrice: agent.credit_cost,
+      customPrices: {}
+    })
     
+    setRequiresInputs(agent.input_schema && agent.input_schema.length > 0)
+    setFormFields(agent.input_schema?.map((field: any) => ({
+      id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      ...field
+    })) || [])
     setShowEditForm(true)
   }
 
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingAgent) return
-    
-    setSubmitting(true)
-
+  const handleToggleActive = async (agentId: string, currentStatus: boolean) => {
     try {
-      // Validate form fields if inputs are required
-      if (requiresInputs) {
-        const validFields = formFields.filter(field => field.name.trim() && field.label.trim())
-        if (validFields.length === 0) {
-          alert('Please add at least one input field or uncheck "requires user inputs"')
-          setSubmitting(false)
-          return
-        }
-      }
-
-      const inputSchema = requiresInputs ? generateInputSchema() : null
-
+      setActionLoading(agentId)
+      
       const { error } = await supabase
         .from('agents')
-        .update({
-          name: formData.name,
-          description: formData.description,
-          credit_cost: formData.credit_cost,
-          category: formData.category,
-          webhook_url: formData.webhook_url,
-          is_active: formData.is_active,
-          input_schema: inputSchema,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', editingAgent.id)
+        .update({ is_active: !currentStatus })
+        .eq('id', agentId)
 
       if (error) throw error
 
-      // Force immediate reload of agents list
       await loadAgents()
-
-      // Reset form
-      setEditingAgent(null)
-      setFormData({
-        name: '',
-        description: '',
-        credit_cost: 1,
-        category: '',
-        webhook_url: '',
-        is_active: true
-      })
-      setRequiresInputs(false)
-      setFormFields([])
-      setShowEditForm(false)
-      
-      showNotification('Agent updated successfully!', 'success')
-    } catch (error) {
-      console.error('Error updating agent:', error)
-      showNotification('Error updating agent. Please try again.', 'error')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const cancelEdit = () => {
-    setEditingAgent(null)
-    setShowEditForm(false)
-    setFormData({
-      name: '',
-      description: '',
-      credit_cost: 1,
-      category: '',
-      webhook_url: '',
-      is_active: true
-    })
-    setRequiresInputs(false)
-    setFormFields([])
-  }
-
-  const deleteAgent = async (agentId: string, agentName: string) => {
-    if (!confirm(`⚠️ DANGER ZONE ⚠️\n\nAre you sure you want to PERMANENTLY DELETE "${agentName}"?\n\nThis action will:\n- Remove the agent from the marketplace\n- Delete all user purchases of this agent\n- Remove all execution history\n\nThis CANNOT be undone!`)) {
-      return
-    }
-
-    setActionLoading(agentId)
-
-    try {
-      console.log('🗑️ Admin deletion started for:', agentName)
-      console.log('Agent ID:', agentId)
-      
-      // Use the diagnostic database function
-      const { data, error } = await supabase.rpc('delete_agent_safe', { 
-        target_agent_id: agentId 
-      })
-      
-      if (error) {
-        console.error('❌ Database function error:', error)
-        throw new Error(`Database function failed: ${error.message}`)
-      }
-
-      console.log('📊 Database function response:', data)
-
-      // Check if deletion was successful
-      if (data && data.success) {
-        console.log('✅ Agent deletion completed successfully')
-        console.log(`🧹 Deleted ${data.deleted_executions} executions and ${data.deleted_user_agents} user purchases`)
-        
-        // Immediate UI update
-        await loadAgents()
-        
-        showNotification(`✅ Agent "${agentName}" permanently deleted!`, 'success')
-        
-      } else if (data && !data.success) {
-        // Function returned detailed error info
-        console.error('❌ Deletion failed with details:', data)
-        
-        let errorMessage = 'Deletion failed'
-        let helpMessage = ''
-        
-        if (data.error_type === 'foreign_key_violation') {
-          errorMessage = 'Cannot delete: Agent still has database references'
-          helpMessage = 'There may be additional tables referencing this agent that need to be cleaned up first.'
-        } else {
-          errorMessage = data.error_message || 'Unknown database error'
-          helpMessage = data.hint || 'Check database logs for more details.'
-        }
-        
-        showNotification(`❌ ${errorMessage}`, 'error')
-        
-        console.log('💡 Admin Help:', helpMessage)
-        console.log('🔍 Error Details:', {
-          type: data.error_type,
-          message: data.error_message,
-          sqlstate: data.sqlstate
-        })
-        
-      } else {
-        throw new Error('Unexpected response from deletion function')
-      }
       
     } catch (error) {
-      console.error('❌ Admin deletion failed:', error)
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-      showNotification(`❌ Failed to delete "${agentName}": ${errorMessage}`, 'error')
-      
-      console.log('💡 Admin Troubleshooting:')
-      console.log('1. Check if delete_agent_safe function exists in database')
-      console.log('2. Verify your admin permissions')
-      console.log('3. Check browser network tab for detailed errors')
-      
+      console.error('Error toggling agent status:', error)
+      alert(`Failed to ${!currentStatus ? 'activate' : 'deactivate'} agent`)
     } finally {
       setActionLoading(null)
     }
   }
 
-  const showNotification = (message: string, type: 'success' | 'error') => {
-    const notification = document.createElement('div')
-    notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg border-2 font-mono text-sm ${
-      type === 'success' 
-        ? 'bg-green-900 border-green-400 text-green-300' 
-        : 'bg-red-900 border-red-400 text-red-300'
-    }`
-    notification.textContent = message
-    document.body.appendChild(notification)
-    
-    setTimeout(() => {
-      document.body.removeChild(notification)
-    }, 3000)
-  }
-
-  const fillSampleData = () => {
-    setFormData({
-      name: 'SEO Content Generator',
-      description: 'AI-powered SEO blog content generator that creates optimized articles',
-      credit_cost: 5,
-      category: 'AI Content',
-      webhook_url: 'https://n8n.irizpro.com/webhook/5b1c4b52-59d1-42a3-b8ad-c7a50350bdc2',
-      is_active: true
-    })
-    setRequiresInputs(true)
-    setFormFields([
-      {
-        id: 'sample_1',
-        name: 'topic',
-        type: 'text',
-        label: 'Content Topic',
-        placeholder: 'e.g., Best Project Management Tools',
-        required: true
-      },
-      {
-        id: 'sample_2', 
-        name: 'target_keywords',
-        type: 'textarea',
-        label: 'Target Keywords',
-        placeholder: 'seo, content, blog writing',
-        required: true
-      },
-      {
-        id: 'sample_3',
-        name: 'word_count',
-        type: 'select',
-        label: 'Word Count',
-        required: true,
-        options: ['1000', '1500', '2000']
-      }
-    ])
-  }
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-green-400 font-mono flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-pulse text-2xl mb-4">◉ ADMIN ACCESS ◉</div>
-          <div className="text-sm">Verifying credentials...</div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-yellow-400 mb-4"></div>
+          <p className="text-white text-lg">Loading Admin Panel...</p>
         </div>
       </div>
     )
   }
 
-  const categories = [...new Set(agents.map(agent => agent.category).filter(Boolean))]
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
+        <div className="text-center text-white">
+          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+          <p>Admin access required</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-black text-green-400 font-mono">
-      {/* Header */}
-      <header className="border-b-2 border-red-500 p-4 bg-gray-900/20">
-        <div className="container mx-auto flex justify-between items-center">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-bold text-red-400">◉ AGENT ADMIN PANEL ◉</h1>
-            <div className="text-sm bg-red-900/30 border border-red-500 rounded px-2 py-1">
-              <span className="text-red-300">FORM BUILDER v2.0</span>
-            </div>
-            <div className="text-sm bg-green-900/30 border border-green-500 rounded px-2 py-1">
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-green-300">LIVE UPDATES</span>
-              </div>
-            </div>
-          </div>
-          
-          <nav className="flex items-center space-x-6">
-            {!showEditForm && (
-              <button 
-                onClick={() => setShowForm(!showForm)}
-                className="px-4 py-2 border border-green-500 text-green-400 hover:bg-green-900 transition-colors"
-              >
-                {showForm ? '✕ CANCEL' : '+ DEPLOY AGENT'}
-              </button>
-            )}
-            
-            <button 
-              onClick={() => router.push('/dashboard')}
-              className="px-4 py-2 border border-cyan-500 text-cyan-400 hover:bg-cyan-900 transition-colors"
-            >
-              DASHBOARD
-            </button>
-
-            <button 
-              onClick={() => router.push('/browse')}
-              className="px-4 py-2 border border-purple-500 text-purple-400 hover:bg-purple-900 transition-colors"
-            >
-              VIEW MARKETPLACE
-            </button>
-          </nav>
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-yellow-400 mb-2">🔧 ADMIN PANEL</h1>
+          <p className="text-gray-300">Manage AI agents in the marketplace</p>
+          <p className="text-sm text-gray-400">Logged in as: {user.email}</p>
         </div>
-      </header>
 
-      <main className="container mx-auto p-6">
-        {/* Add Agent Form */}
-        {(showForm || showEditForm) && (
-          <div className="mb-8 bg-gray-900 border-2 border-green-500 rounded-lg p-6 shadow-lg">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl text-green-400">
-                {editingAgent ? '◉ EDIT AGENT ◉' : '◉ DEPLOY NEW AGENT ◉'}
-              </h2>
-              <div className="flex space-x-2">
-                {!editingAgent && (
-                  <button 
-                    onClick={fillSampleData}
-                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    FILL SAMPLE DATA
-                  </button>
-                )}
-                {editingAgent && (
-                  <button 
-                    onClick={cancelEdit}
-                    className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-                  >
-                    CANCEL EDIT
-                  </button>
-                )}
-              </div>
-            </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-gray-800/50 border border-yellow-500 rounded-lg p-6 text-center">
+            <h3 className="text-2xl font-bold text-yellow-400">{agents.length}</h3>
+            <p className="text-gray-300">Total Agents</p>
+          </div>
+          <div className="bg-gray-800/50 border border-green-500 rounded-lg p-6 text-center">
+            <h3 className="text-2xl font-bold text-green-400">{agents.filter(a => a.is_active).length}</h3>
+            <p className="text-gray-300">Active Agents</p>
+          </div>
+          <div className="bg-gray-800/50 border border-red-500 rounded-lg p-6 text-center">
+            <h3 className="text-2xl font-bold text-red-400">{agents.filter(a => !a.is_active).length}</h3>
+            <p className="text-gray-300">Inactive Agents</p>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex gap-4 mb-8">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center space-x-2"
+          >
+            <span>➕</span>
+            <span>{showForm ? 'Hide Form' : 'Deploy New Agent'}</span>
+          </button>
+          
+          {showForm && (
+            <button
+              onClick={fillSampleData}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+            >
+              🧪 Fill Sample Data
+            </button>
+          )}
+        </div>
+
+        {/* Deploy New Agent Form */}
+        {showForm && (
+          <div className="bg-gray-800/50 border border-green-500 rounded-lg p-6 mb-8">
+            <h2 className="text-2xl font-bold text-green-400 mb-6 text-center">
+              ◉ DEPLOY NEW AGENT ◉
+            </h2>
             
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Basic Agent Info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-green-300">Agent Name</label>
+                  <label className="block text-yellow-400 font-medium mb-2">Agent Name *</label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="w-full px-3 py-2 bg-black border border-gray-600 rounded focus:border-green-400 focus:outline-none text-green-200"
                     placeholder="e.g., SEO Content Analyzer"
+                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-yellow-400 focus:outline-none"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-green-300">Category</label>
+                  <label className="block text-yellow-400 font-medium mb-2">Category *</label>
                   <select
                     value={formData.category}
                     onChange={(e) => setFormData({...formData, category: e.target.value})}
-                    className="w-full px-3 py-2 bg-black border border-gray-600 rounded focus:border-green-400 focus:outline-none text-green-200"
+                    className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-yellow-400 focus:outline-none"
                     required
                   >
                     <option value="">Select Category</option>
-                    {categories.map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                    <option value="AI Content">AI Content</option>
-                    <option value="Data Processing">Data Processing</option>
-                    <option value="Automation">Automation</option>
-                    <option value="Research">Research</option>
-                    <option value="SEO & Marketing">SEO & Marketing</option>
-                    <option value="E-commerce">E-commerce</option>
+                    <option value="SEO">SEO</option>
+                    <option value="Content">Content</option>
+                    <option value="Social Media">Social Media</option>
+                    <option value="Analytics">Analytics</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Development">Development</option>
+                    <option value="Design">Design</option>
+                    <option value="Business">Business</option>
+                    <option value="Other">Other</option>
                   </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-green-300">Credit Cost</label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="0.01"
-                    value={formData.credit_cost}
-                    onChange={(e) => setFormData({...formData, credit_cost: parseFloat(e.target.value)})}
-                    className="w-full px-3 py-2 bg-black border border-gray-600 rounded focus:border-green-400 focus:outline-none text-green-200"
-                    required
-                  />
-                </div>
-
-                <div className="flex items-center">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.is_active}
-                      onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
-                      className="w-4 h-4 text-green-500"
-                    />
-                    <span className="text-sm text-green-300">Active in Marketplace</span>
-                  </label>
                 </div>
               </div>
 
+              {/* MULTI-CURRENCY PRICING SECTION - INLINE */}
+              <MultiCurrencyPricingForm
+                initialPricing={agentPricing}
+                onPricingChange={handlePricingChange}
+              />
+
               {/* Webhook URL */}
               <div>
-                <label className="block text-sm font-medium mb-2 text-green-300">n8n Webhook URL</label>
+                <label className="block text-yellow-400 font-medium mb-2">n8n Webhook URL *</label>
                 <input
                   type="url"
                   value={formData.webhook_url}
                   onChange={(e) => setFormData({...formData, webhook_url: e.target.value})}
-                  className="w-full px-3 py-2 bg-black border border-gray-600 rounded focus:border-green-400 focus:outline-none text-green-200"
                   placeholder="https://n8n.irizpro.com/webhook/your-webhook-id"
+                  className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-yellow-400 focus:outline-none"
+                  required
                 />
               </div>
 
-              {/* User Inputs Checkbox */}
-              <div className="bg-gray-800/50 border border-yellow-500 rounded-lg p-4">
+              {/* Agent Description */}
+              <div>
+                <label className="block text-yellow-400 font-medium mb-2">Agent Description *</label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  placeholder="Describe what this agent does, its benefits, and capabilities..."
+                  rows={4}
+                  className="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-yellow-400 focus:outline-none resize-none"
+                  required
+                />
+              </div>
+
+              {/* User Inputs Toggle */}
+              <div className="bg-gray-900/50 border border-gray-600 rounded-lg p-4">
                 <label className="flex items-center space-x-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={requiresInputs}
                     onChange={(e) => setRequiresInputs(e.target.checked)}
-                    className="w-5 h-5 text-yellow-500"
+                    className="w-5 h-5 text-yellow-400 bg-gray-900 border-gray-600 rounded focus:ring-yellow-400"
                   />
                   <div>
-                    <span className="text-lg font-medium text-yellow-400">
-                      🛠 This agent requires user inputs
-                    </span>
-                    <p className="text-sm text-gray-400 mt-1">
-                      Check this if users need to provide data before executing this agent
-                    </p>
+                    <span className="text-yellow-400 font-medium">🛠 This agent requires user inputs</span>
+                    <p className="text-sm text-gray-400">Check this if users need to provide data before executing this agent</p>
                   </div>
                 </label>
               </div>
 
-              {/* Visual Form Builder */}
-              {requiresInputs && (
-                <GoogleFormsStyleBuilder
-                  formFields={formFields}
-                  onAddField={addFormField}
-                  onUpdateField={updateFormField}
-                  onRemoveField={removeFormField}
-                  onMoveField={moveFormField}
-                  onAddOption={addOption}
-                  onUpdateOption={updateOption}
-                  onRemoveOption={removeOption}
+              {/* Active Toggle */}
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  checked={formData.is_active}
+                  onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+                  className="w-5 h-5 text-green-400 bg-gray-900 border-gray-600 rounded focus:ring-green-400"
                 />
-              )}
-
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium mb-2 text-green-300">Agent Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="w-full px-3 py-2 bg-black border border-gray-600 rounded focus:border-green-400 focus:outline-none h-24 text-green-200"
-                  placeholder="Describe what this agent does, its benefits, and capabilities..."
-                  required
-                />
+                <span className="text-green-400 font-medium">✅ Active in Marketplace</span>
               </div>
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 text-black font-bold border border-green-400 transition-colors"
-              >
-                {submitting ? (editingAgent ? '💾 UPDATING AGENT...' : '🚀 DEPLOYING AGENT...') : (editingAgent ? '💾 UPDATE AGENT' : '🚀 DEPLOY TO MARKETPLACE')}
-              </button>
+              {/* Submit Buttons */}
+              <div className="flex gap-4 pt-6">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white py-4 rounded-lg font-bold text-lg transition-colors"
+                >
+                  {submitting ? (
+                    <span className="flex items-center justify-center space-x-2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <span>Deploying...</span>
+                    </span>
+                  ) : (
+                    '🚀 DEPLOY TO MARKETPLACE'
+                  )}
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="px-6 py-4 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </form>
           </div>
         )}
 
         {/* Agents List */}
-        <div className="bg-gray-900 border-2 border-red-500 rounded-lg p-6 shadow-lg">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl text-red-400">◉ AGENT REGISTRY ◉</h2>
-            <div className="text-sm">
-              Total: <span className="text-cyan-400 font-bold">{agents.length}</span> | 
-              Active: <span className="text-green-400 font-bold">{agents.filter(a => a.is_active).length}</span> |
-              With Inputs: <span className="text-yellow-400 font-bold">{agents.filter(a => a.input_schema && a.input_schema.length > 0).length}</span>
-            </div>
-          </div>
-
+        <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-6">
+          <h2 className="text-2xl font-bold text-white mb-6">📋 Marketplace Agents ({agents.length})</h2>
+          
           {agents.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <div className="text-4xl mb-4">🤖</div>
-              <div className="text-lg">No agents in the system</div>
-              <div className="text-sm mt-2">Deploy your first agent to get started</div>
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">🤖</div>
+              <p className="text-gray-400 text-lg">No agents deployed yet</p>
+              <p className="text-gray-500">Deploy your first AI agent to get started!</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {agents.map((agent) => (
-                <div
-                  key={agent.id}
-                  className={`border-2 rounded-lg p-6 transition-all duration-300 ${
-                    agent.is_active 
-                      ? 'border-green-500 bg-green-900/10 shadow-green-500/20' 
-                      : 'border-gray-600 bg-gray-800/10 shadow-gray-500/20'
-                  } shadow-lg hover:shadow-xl`}
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="text-lg font-bold text-cyan-400">{agent.name}</h3>
-                        <span className="text-sm text-purple-400 bg-purple-900/30 border border-purple-500 rounded px-2 py-1">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-600">
+                    <th className="text-left py-3 px-4 text-yellow-400">Name</th>
+                    <th className="text-left py-3 px-4 text-yellow-400">Category</th>
+                    <th className="text-left py-3 px-4 text-yellow-400">Pricing</th>
+                    <th className="text-left py-3 px-4 text-yellow-400">Status</th>
+                    <th className="text-left py-3 px-4 text-yellow-400">Created</th>
+                    <th className="text-left py-3 px-4 text-yellow-400">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agents.map((agent) => (
+                    <tr key={agent.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                      <td className="py-4 px-4">
+                        <div>
+                          <div className="font-medium text-white">{agent.name}</div>
+                          <div className="text-sm text-gray-400 max-w-xs truncate">{agent.description}</div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="bg-blue-600 text-white px-2 py-1 rounded text-sm">
                           {agent.category}
                         </span>
-                        {agent.webhook_url && (
-                          <span className="text-sm text-blue-400 bg-blue-900/30 border border-blue-500 rounded px-2 py-1">
-                            n8n Ready
-                          </span>
-                        )}
-                        {agent.input_schema && agent.input_schema.length > 0 && (
-                          <span className="text-sm text-yellow-400 bg-yellow-900/30 border border-yellow-500 rounded px-2 py-1">
-                            {agent.input_schema.length} Inputs
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="text-xs text-gray-400 space-y-1 mb-2">
-                        <div>Created: {new Date(agent.created_at).toLocaleString()}</div>
-                        <div>Cost: ₹{agent.credit_cost} | Status: {agent.is_active ? 'Active' : 'Inactive'}</div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-3">
-                      <div className={`px-3 py-2 text-xs font-bold rounded border-2 ${
-                        agent.is_active 
-                          ? 'bg-green-600 text-black border-green-400' 
-                          : 'bg-gray-600 text-white border-gray-400'
-                      }`}>
-                        {agent.is_active ? '✓ ACTIVE' : '✕ INACTIVE'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-sm text-gray-300 mb-4 leading-relaxed">{agent.description}</p>
-
-                  {/* Show Input Fields Preview */}
-                  {agent.input_schema && agent.input_schema.length > 0 && (
-                    <div className="mb-4 p-3 bg-black/40 border border-yellow-600 rounded">
-                      <div className="text-yellow-300 text-sm font-bold mb-2">Required User Inputs:</div>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {agent.input_schema.map((field: any, index: number) => (
-                          <div key={index} className="text-xs">
-                            <span className="text-yellow-400">{field.label}</span>
-                            <span className="text-gray-400"> ({field.type})</span>
-                            {field.required && <span className="text-red-400">*</span>}
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="text-white font-medium">
+                          ₹{agent.pricing_config?.basePrice || agent.credit_cost}
+                        </div>
+                        {agent.pricing_config?.customPrices && Object.keys(agent.pricing_config.customPrices).length > 0 && (
+                          <div className="text-xs text-gray-400">
+                            +{Object.keys(agent.pricing_config.customPrices).length} custom
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex space-x-3">
-                    <button
-                      onClick={() => editAgent(agent)}
-                      disabled={actionLoading === agent.id}
-                      className="px-4 py-3 border-2 border-blue-500 text-blue-400 hover:bg-blue-900 hover:text-white transition-all font-bold"
-                    >
-                      ✏️ EDIT
-                    </button>
-                    
-                    <button
-                      onClick={() => toggleAgentStatus(agent.id, agent.is_active)}
-                      disabled={actionLoading === agent.id}
-                      className={`flex-1 px-4 py-3 border-2 transition-all font-bold ${
-                        agent.is_active
-                          ? 'border-red-500 text-red-400 hover:bg-red-900 hover:text-white'
-                          : 'border-green-500 text-green-400 hover:bg-green-900 hover:text-black'
-                      } ${actionLoading === agent.id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      {actionLoading === agent.id ? (
-                        <span className="flex items-center justify-center">
-                          <div className="animate-spin mr-2">⟳</div>
-                          UPDATING...
+                        )}
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className={`px-2 py-1 rounded text-sm ${
+                          agent.is_active 
+                            ? 'bg-green-600 text-white' 
+                            : 'bg-red-600 text-white'
+                        }`}>
+                          {agent.is_active ? '✅ Active' : '❌ Inactive'}
                         </span>
-                      ) : (
-                        agent.is_active ? '⏸ DEACTIVATE' : '▶ ACTIVATE'
-                      )}
-                    </button>
-
-                    <button
-                      onClick={() => deleteAgent(agent.id, agent.name)}
-                      disabled={actionLoading === agent.id}
-                      className={`px-6 py-3 border-2 border-red-600 text-red-400 hover:bg-red-900 hover:text-white transition-all font-bold ${
-                        actionLoading === agent.id ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      🗑 DELETE
-                    </button>
-                  </div>
-                </div>
-              ))}
+                      </td>
+                      <td className="py-4 px-4 text-gray-400 text-sm">
+                        {new Date(agent.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => startEdit(agent)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                          >
+                            ✏️ Edit
+                          </button>
+                          
+                          <button
+                            onClick={() => handleToggleActive(agent.id, agent.is_active)}
+                            disabled={actionLoading === agent.id}
+                            className={`px-3 py-1 rounded text-sm transition-colors ${
+                              agent.is_active
+                                ? 'bg-red-600 hover:bg-red-700 text-white'
+                                : 'bg-green-600 hover:bg-green-700 text-white'
+                            } disabled:opacity-50`}
+                          >
+                            {actionLoading === agent.id ? '...' : (agent.is_active ? '❌' : '✅')}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   )
 }
 
-// Google Forms Style Form Builder Component
-interface GoogleFormsStyleBuilderProps {
-  formFields: FormField[]
-  onAddField: (type: FormField['type']) => void
-  onUpdateField: (id: string, field: string, value: any) => void
-  onRemoveField: (id: string) => void
-  onMoveField: (id: string, direction: 'up' | 'down') => void
-  onAddOption: (fieldId: string) => void
-  onUpdateOption: (fieldId: string, optionIndex: number, value: string) => void
-  onRemoveOption: (fieldId: string, optionIndex: number) => void
+// INLINE MULTI-CURRENCY PRICING COMPONENT - FIXED TYPES
+interface MultiCurrencyPricingFormProps {
+  initialPricing: PricingConfig
+  onPricingChange: (pricing: PricingConfig) => void
 }
 
-function GoogleFormsStyleBuilder({ 
-  formFields, 
-  onAddField, 
-  onUpdateField, 
-  onRemoveField, 
-  onMoveField,
-  onAddOption,
-  onUpdateOption,
-  onRemoveOption
-}: GoogleFormsStyleBuilderProps) {
+function MultiCurrencyPricingForm({ initialPricing, onPricingChange }: MultiCurrencyPricingFormProps) {
+  const [enableCustomPricing, setEnableCustomPricing] = useState(
+    Object.keys(initialPricing.customPrices).length > 0
+  )
 
-  const fieldTypes: { type: FormField['type']; label: string; icon: string }[] = [
-    { type: 'text', label: 'Short Text', icon: '📝' },
-    { type: 'textarea', label: 'Long Text', icon: '📄' },
-    { type: 'select', label: 'Dropdown', icon: '📋' },
-    { type: 'radio', label: 'Multiple Choice', icon: '🔘' },
-    { type: 'checkbox', label: 'Checkboxes', icon: '☑️' },
-    { type: 'number', label: 'Number', icon: '🔢' },
-    { type: 'email', label: 'Email', icon: '📧' },
-    { type: 'url', label: 'URL', icon: '🔗' }
-  ]
-
-  // Prevent form submission on button clicks
-  const handleAddOption = (e: React.MouseEvent, fieldId: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    onAddOption(fieldId)
+  // FIXED: Handle pricing updates properly
+  const updatePricing = (basePrice: number, customPrices: { [currency: string]: number }) => {
+    const newPricing: PricingConfig = {
+      basePrice,
+      customPrices: enableCustomPricing ? customPrices : {}
+    }
+    onPricingChange(newPricing)
   }
 
-  const handleRemoveOption = (e: React.MouseEvent, fieldId: string, optionIndex: number) => {
-    e.preventDefault()
-    e.stopPropagation()
-    onRemoveOption(fieldId, optionIndex)
+  const handleBasePriceChange = (value: number) => {
+    updatePricing(value, initialPricing.customPrices)
   }
 
-  const handleMoveField = (e: React.MouseEvent, id: string, direction: 'up' | 'down') => {
-    e.preventDefault()
-    e.stopPropagation()
-    onMoveField(id, direction)
+  // FIXED: Handle custom price changes
+  const handleCustomPriceChange = (currency: string, value: string) => {
+    const numValue = parseFloat(value) || 0
+    const newCustomPrices = { ...initialPricing.customPrices }
+    
+    if (numValue > 0) {
+      newCustomPrices[currency] = numValue
+    } else {
+      delete newCustomPrices[currency]
+    }
+    
+    updatePricing(initialPricing.basePrice, newCustomPrices)
   }
 
-  const handleRemoveField = (e: React.MouseEvent, id: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    onRemoveField(id)
-  }
-
-  const handleAddField = (e: React.MouseEvent, type: FormField['type']) => {
-    e.preventDefault()
-    e.stopPropagation()
-    onAddField(type)
+  const toggleCustomPricing = (enabled: boolean) => {
+    setEnableCustomPricing(enabled)
+    if (!enabled) {
+      updatePricing(initialPricing.basePrice, {})
+    }
   }
 
   return (
-    <div className="bg-gray-800/50 border border-yellow-500 rounded-lg p-6">
-      <h3 className="text-lg font-bold text-yellow-400 mb-6">🛠 Form Builder</h3>
+    <div className="bg-gray-900/50 border border-blue-500 rounded-lg p-6">
+      <h3 className="text-xl font-bold text-blue-400 mb-4">💰 Pricing Configuration</h3>
       
-      {/* Form Fields */}
-      <div className="space-y-4 mb-6">
-        {formFields.map((field, index) => (
-          <div key={field.id} className="bg-white border-2 border-gray-300 rounded-lg p-4 relative">
-            {/* Field Header */}
-            <div className="flex justify-between items-start mb-4">
+      <div className="space-y-4">
+        {/* Base Price */}
+        <div>
+          <label className="block text-yellow-400 font-medium mb-2">
+            Base Price (INR) *
+          </label>
+          <div className="flex items-center space-x-2">
+            <span className="text-gray-300">₹</span>
+            <input
+              type="number"
+              value={initialPricing.basePrice}
+              onChange={(e) => handleBasePriceChange(Number(e.target.value))}
+              min="1"
+              className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-yellow-400 focus:outline-none"
+              required
+            />
+          </div>
+        </div>
+
+        {/* Custom Pricing Toggle */}
+        <div className="space-y-3">
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              id="customPricing"
+              checked={enableCustomPricing}
+              onChange={(e) => toggleCustomPricing(e.target.checked)}
+              className="rounded border-gray-600 text-blue-500 focus:ring-blue-500"
+            />
+            <label htmlFor="customPricing" className="text-sm font-medium text-blue-300">
+              Enable Custom Regional Pricing
+            </label>
+          </div>
+        </div>
+
+        {/* Custom Pricing Inputs */}
+        {enableCustomPricing && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* USD */}
+            <div>
+              <label className="block text-gray-300 font-medium mb-2">
+                🇺🇸 USD
+              </label>
               <div className="flex items-center space-x-2">
-                <span className="text-lg">
-                  {fieldTypes.find(ft => ft.type === field.type)?.icon}
-                </span>
-                <span className="text-gray-600 font-medium">
-                  {fieldTypes.find(ft => ft.type === field.type)?.label}
-                </span>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={(e) => handleMoveField(e, field.id, 'up')}
-                  disabled={index === 0}
-                  className="p-1 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-30"
-                  title="Move up"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => handleMoveField(e, field.id, 'down')}
-                  disabled={index === formFields.length - 1}
-                  className="p-1 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-30"
-                  title="Move down"
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => handleRemoveField(e, field.id)}
-                  className="p-1 text-red-600 hover:bg-red-100 rounded"
-                  title="Delete field"
-                >
-                  🗑
-                </button>
+                <span className="text-gray-300">$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={initialPricing.customPrices.USD || ''}
+                  onChange={(e) => handleCustomPriceChange('USD', e.target.value)}
+                  placeholder="Auto-convert"
+                  className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-yellow-400 focus:outline-none"
+                />
               </div>
             </div>
 
-            {/* Field Configuration */}
-            <div className="space-y-3">
-              {/* Display Label */}
-              <div>
+            {/* AED */}
+            <div>
+              <label className="block text-gray-300 font-medium mb-2">
+                🇦🇪 AED
+              </label>
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-300">د.إ</span>
                 <input
-                  type="text"
-                  value={field.label}
-                  onChange={(e) => onUpdateField(field.id, 'label', e.target.value)}
-                  placeholder="Question"
-                  className="w-full text-gray-800 bg-transparent border-b border-gray-300 focus:border-blue-500 focus:outline-none pb-1 text-lg"
+                  type="number"
+                  step="0.01"
+                  value={initialPricing.customPrices.AED || ''}
+                  onChange={(e) => handleCustomPriceChange('AED', e.target.value)}
+                  placeholder="Auto-convert"
+                  className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-yellow-400 focus:outline-none"
                 />
               </div>
+            </div>
 
-              {/* Field Key */}
-              <div className="bg-gray-50 p-3 rounded">
-                <label className="block text-sm font-medium text-gray-600 mb-1">Field Key (for n8n)</label>
+            {/* EUR */}
+            <div>
+              <label className="block text-gray-300 font-medium mb-2">
+                🇪🇺 EUR
+              </label>
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-300">€</span>
                 <input
-                  type="text"
-                  value={field.name}
-                  onChange={(e) => onUpdateField(field.id, 'name', e.target.value)}
-                  placeholder="field_name"
-                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:border-blue-500 focus:outline-none text-gray-800"
+                  type="number"
+                  step="0.01"
+                  value={initialPricing.customPrices.EUR || ''}
+                  onChange={(e) => handleCustomPriceChange('EUR', e.target.value)}
+                  placeholder="Auto-convert"
+                  className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-yellow-400 focus:outline-none"
                 />
-              </div>
-
-              {/* Placeholder */}
-              <div className="bg-gray-50 p-3 rounded">
-                <label className="block text-sm font-medium text-gray-600 mb-1">Placeholder Text</label>
-                <input
-                  type="text"
-                  value={field.placeholder}
-                  onChange={(e) => onUpdateField(field.id, 'placeholder', e.target.value)}
-                  placeholder="Your answer"
-                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:border-blue-500 focus:outline-none text-gray-800"
-                />
-              </div>
-
-              {/* Options for select/radio */}
-              {(field.type === 'select' || field.type === 'radio' || field.type === 'checkbox') && (
-                <div className="bg-gray-50 p-3 rounded">
-                  <label className="block text-sm font-medium text-gray-600 mb-2">Options</label>
-                  <div className="space-y-2">
-                    {field.options?.map((option, optionIndex) => (
-                      <div key={optionIndex} className="flex items-center space-x-2">
-                        <span className="text-gray-400 text-sm w-4">{optionIndex + 1}.</span>
-                        <input
-                          type="text"
-                          value={option}
-                          onChange={(e) => onUpdateOption(field.id, optionIndex, e.target.value)}
-                          placeholder={`Option ${optionIndex + 1}`}
-                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:border-blue-500 focus:outline-none text-gray-800"
-                        />
-                        {field.options && field.options.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={(e) => handleRemoveOption(e, field.id, optionIndex)}
-                            className="text-red-600 hover:bg-red-100 p-1 rounded text-sm"
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={(e) => handleAddOption(e, field.id)}
-                      className="text-blue-600 hover:bg-blue-100 px-2 py-1 rounded text-sm"
-                    >
-                      + Add option
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Field Preview */}
-              <div className="bg-gray-50 p-3 rounded">
-                <label className="block text-sm font-medium text-gray-600 mb-2">Preview</label>
-                <div className="text-gray-800">
-                  {field.type === 'textarea' ? (
-                    <textarea 
-                      placeholder={field.placeholder || 'Your answer'}
-                      disabled 
-                      className="w-full p-2 border border-gray-300 rounded resize-none h-20 bg-white"
-                    />
-                  ) : field.type === 'select' ? (
-                    <select disabled className="w-full p-2 border border-gray-300 rounded bg-white">
-                      <option>{field.placeholder || 'Choose'}</option>
-                      {field.options?.filter(opt => opt.trim()).map((option, i) => (
-                        <option key={i}>{option}</option>
-                      ))}
-                    </select>
-                  ) : field.type === 'radio' ? (
-                    <div className="space-y-2">
-                      {field.options?.filter(opt => opt.trim()).map((option, i) => (
-                        <div key={i} className="flex items-center space-x-2">
-                          <input type="radio" disabled className="text-blue-600" />
-                          <span>{option}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : field.type === 'checkbox' ? (
-                    <div className="space-y-2">
-                      {field.options?.filter(opt => opt.trim()).map((option, i) => (
-                        <div key={i} className="flex items-center space-x-2">
-                          <input type="checkbox" disabled className="text-blue-600" />
-                          <span>{option}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <input 
-                      type={field.type}
-                      placeholder={field.placeholder || 'Your answer'}
-                      disabled 
-                      className="w-full p-2 border border-gray-300 rounded bg-white"
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Required Toggle */}
-              <div className="flex items-center space-x-2 pt-2 border-t border-gray-200">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={field.required}
-                    onChange={(e) => onUpdateField(field.id, 'required', e.target.checked)}
-                    className="text-blue-600"
-                  />
-                  <span className="text-sm text-gray-600">Required</span>
-                </label>
               </div>
             </div>
           </div>
-        ))}
-      </div>
+        )}
 
-      {/* Add Field Button */}
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-        <div className="text-center">
-          <div className="text-gray-500 mb-3">Add a new field</div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {fieldTypes.map(({ type, label, icon }) => (
-              <button
-                key={type}
-                type="button"
-                onClick={(e) => handleAddField(e, type)}
-                className="p-3 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors flex items-center justify-center space-x-2"
-              >
-                <span>{icon}</span>
-                <span className="hidden md:inline">{label}</span>
-              </button>
-            ))}
+        {/* Pricing Preview */}
+        <div className="mt-4 p-4 bg-gray-800 rounded-lg">
+          <h4 className="text-sm font-medium text-gray-300 mb-2">📊 Pricing Preview</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="text-center">
+              <div className="text-yellow-400 font-medium">₹{initialPricing.basePrice}</div>
+              <div className="text-gray-500">India (Base)</div>
+            </div>
+            <div className="text-center">
+              <div className="text-green-400 font-medium">
+                ${initialPricing.customPrices.USD || (initialPricing.basePrice * 0.012).toFixed(2)}
+              </div>
+              <div className="text-gray-500">
+                USA {initialPricing.customPrices.USD ? '(Custom)' : '(Auto)'}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-blue-400 font-medium">
+                د.إ{initialPricing.customPrices.AED || (initialPricing.basePrice * 0.044).toFixed(2)}
+              </div>
+              <div className="text-gray-500">
+                UAE {initialPricing.customPrices.AED ? '(Custom)' : '(Auto)'}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-purple-400 font-medium">
+                €{initialPricing.customPrices.EUR || (initialPricing.basePrice * 0.011).toFixed(2)}
+              </div>
+              <div className="text-gray-500">
+                Europe {initialPricing.customPrices.EUR ? '(Custom)' : '(Auto)'}
+              </div>
+            </div>
           </div>
         </div>
       </div>

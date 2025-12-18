@@ -271,7 +271,13 @@ export function AgentPricingForm({ initialPricing, onPricingChange }: AgentPrici
 
 // Main Agent Deployment Form
 export function AgentDeploymentForm() {
-  const [agentData, setAgentData] = useState({
+  const [agentData, setAgentData] = useState<{
+    name: string
+    description: string
+    category: string
+    webhook_url: string
+    pricing: PricingConfig
+  }>({
     name: '',
     description: '',
     category: '',
@@ -279,7 +285,7 @@ export function AgentDeploymentForm() {
     pricing: {
       basePrice: 50,
       customPrices: {}
-    } as PricingConfig,
+    },
   })
 
   const [loading, setLoading] = useState(false)
