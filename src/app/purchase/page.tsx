@@ -23,7 +23,7 @@ function LoadingPurchase() {
   )
 }
 
-// Your original purchase page component - UNCHANGED
+// Main purchase page component
 function PurchasePageContent() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(false)
@@ -52,7 +52,9 @@ function PurchasePageContent() {
     document.body.appendChild(script)
 
     return () => {
-      document.body.removeChild(script)
+      if (script.parentNode) {
+        document.body.removeChild(script)
+      }
     }
   }, [])
 
@@ -74,9 +76,11 @@ function PurchasePageContent() {
     }
 
     setLoading(true)
+    console.log('🚀 Starting payment process...')
 
     try {
       // Create order first
+      console.log('📦 Creating Razorpay order...')
       const orderResponse = await fetch('/api/razorpay/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,10 +96,13 @@ function PurchasePageContent() {
       })
 
       const orderData = await orderResponse.json()
+      console.log('📋 Order response:', orderData)
       
       if (!orderResponse.ok) {
         throw new Error(orderData.error || 'Failed to create order')
       }
+
+      console.log('✅ Order created successfully, opening Razorpay...')
 
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
@@ -114,15 +121,24 @@ function PurchasePageContent() {
           credits: creditAmount.toString(),
           user_id: user?.id
         },
-        // **FIXED HANDLER** - This calls verification
+        // **CRITICAL FIX** - Enhanced handler with better logging and error handling
         handler: async (response: any) => {
+          console.log('🔥 Payment successful! Starting verification...', response)
+          console.log('📋 Payment response details:', {
+            order_id: response.razorpay_order_id,
+            payment_id: response.razorpay_payment_id,
+            signature_present: !!response.razorpay_signature
+          })
+          
           try {
-            console.log('✅ Payment successful! Verifying...', response)
-            
-            // Call verification endpoint
+            // Call verification endpoint with detailed logging
+            console.log('📡 Calling verification API...')
             const verifyResponse = await fetch('/api/razorpay/verify-payment', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
               body: JSON.stringify({
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
@@ -130,24 +146,40 @@ function PurchasePageContent() {
               })
             })
 
-            const verifyData = await verifyResponse.json()
+            console.log('📡 Verification response status:', verifyResponse.status)
+            
+            let verifyData
+            try {
+              verifyData = await verifyResponse.json()
+              console.log('📋 Verification data:', verifyData)
+            } catch (parseError) {
+              console.error('❌ Failed to parse verification response:', parseError)
+              throw new Error('Server response was not valid JSON')
+            }
             
             if (verifyResponse.ok && verifyData.success) {
-              alert('✅ Payment successful! Agent purchased successfully. Redirecting to dashboard...')
-              router.push('/dashboard?payment=success')
+              console.log('✅ Verification successful! Redirecting...')
+              alert('🎉 Payment successful! Agent purchased successfully. Redirecting to dashboard...')
+              
+              // Force redirect after a short delay
+              setTimeout(() => {
+                window.location.href = '/dashboard?payment=success'
+              }, 1000)
             } else {
               console.error('❌ Verification failed:', verifyData)
-              alert(`❌ Payment verification failed: ${verifyData.error || 'Unknown error'}`)
+              alert(`❌ Payment verification failed: ${verifyData.error || 'Unknown error'}. Please contact support with payment ID: ${response.razorpay_payment_id}`)
             }
-          } catch (error) {
-            console.error('❌ Verification error:', error)
-            alert('❌ Payment verification failed. Please contact support.')
+          } catch (verifyError) {
+            console.error('❌ Verification network error:', verifyError)
+            alert(`❌ Payment verification failed due to network error. Please contact support with payment ID: ${response.razorpay_payment_id}`)
           } finally {
+            // Always reset loading state
             setLoading(false)
           }
         },
         modal: {
           ondismiss: () => {
+            console.log('❌ Payment modal closed by user')
             setLoading(false)
           }
         },
@@ -156,12 +188,13 @@ function PurchasePageContent() {
         }
       }
 
+      console.log('🚀 Opening Razorpay with options:', options)
       const rzp = new window.Razorpay(options)
       rzp.open()
 
     } catch (error) {
-      console.error('Payment error:', error)
-      alert('Payment failed. Please try again.')
+      console.error('❌ Payment initiation failed:', error)
+      alert('Failed to initiate payment. Please try again.')
       setLoading(false)
     }
   }
@@ -293,7 +326,7 @@ function PurchasePageContent() {
   )
 }
 
-// **ONLY CHANGE: Wrap in Suspense to fix deployment**
+// Export with Suspense wrapper
 export default function PurchasePage() {
   return (
     <Suspense fallback={<LoadingPurchase />}>
