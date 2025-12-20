@@ -29,11 +29,14 @@ interface Agent {
 interface FormField {
   id: string
   name: string
-  type: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'number' | 'email' | 'url'
+  type: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'number' | 'email' | 'url' | 'upload'
   label: string
   placeholder?: string
   required: boolean
   options?: string[]
+  acceptedFileTypes?: string[] // For upload fields: ['image/*', 'application/pdf', etc.]
+  maxFileSize?: number // In MB
+  multiple?: boolean // Allow multiple file uploads
 }
 
 export default function AdminPanel() {
@@ -137,13 +140,16 @@ export default function AdminPanel() {
 
   const addFormField = (type: FormField['type']) => {
     const newField: FormField = {
-      id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `field_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
       name: '',
       type,
       label: '',
       placeholder: '',
       required: false,
-      options: (type === 'select' || type === 'radio') ? [''] : undefined
+      options: (type === 'select' || type === 'radio') ? [''] : undefined,
+      acceptedFileTypes: type === 'upload' ? ['image/*', 'application/pdf', '.doc,.docx,.csv,.xlsx'] : undefined,
+      maxFileSize: type === 'upload' ? 10 : undefined, // 10MB default
+      multiple: type === 'upload' ? false : undefined
     }
     setFormFields([...formFields, newField])
   }
@@ -220,7 +226,10 @@ export default function AdminPanel() {
         label: field.label,
         required: field.required,
         placeholder: field.placeholder || undefined,
-        options: field.options?.filter(opt => opt.trim()) || undefined
+        options: field.options?.filter(opt => opt.trim()) || undefined,
+        acceptedFileTypes: field.acceptedFileTypes || undefined,
+        maxFileSize: field.maxFileSize || undefined,
+        multiple: field.multiple || undefined
       }))
   }
 
@@ -258,6 +267,17 @@ export default function AdminPanel() {
         label: 'Target Keywords',
         placeholder: 'Enter your target keywords, one per line',
         required: true
+      },
+      {
+        id: 'field_3',
+        name: 'content_file',
+        type: 'upload',
+        label: 'Content File (Optional)',
+        placeholder: '',
+        required: false,
+        acceptedFileTypes: ['application/pdf', '.doc,.docx'],
+        maxFileSize: 5,
+        multiple: false
       }
     ])
   }
@@ -333,26 +353,51 @@ export default function AdminPanel() {
   }
 
   const startEdit = (agent: Agent) => {
-    setEditingAgent(agent)
-    setFormData({
-      name: agent.name,
-      description: agent.description,
-      category: agent.category,
-      webhook_url: agent.webhook_url || '',
-      is_active: agent.is_active
-    })
-    
-    setAgentPricing(agent.pricing_config || {
-      basePrice: agent.credit_cost,
-      customPrices: {}
-    })
-    
-    setRequiresInputs(Boolean(agent.input_schema && agent.input_schema.length > 0))
-    setFormFields(agent.input_schema?.map((field: any) => ({
-      id: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      ...field
-    })) || [])
-    setShowEditForm(true)
+    try {
+      setEditingAgent(agent)
+      setFormData({
+        name: agent.name || '',
+        description: agent.description || '',
+        category: agent.category || '',
+        webhook_url: agent.webhook_url || '',
+        is_active: agent.is_active !== undefined ? agent.is_active : true
+      })
+      
+      // Handle pricing config with fallbacks for old agents
+      setAgentPricing(agent.pricing_config || {
+        basePrice: agent.credit_cost || 50,
+        customPrices: {}
+      })
+      
+      // Handle input schema with fallbacks for old agents
+      const hasInputSchema = Boolean(agent.input_schema && Array.isArray(agent.input_schema) && agent.input_schema.length > 0)
+      setRequiresInputs(hasInputSchema)
+      
+      // Safely map input schema with proper error handling
+      const formattedFields = hasInputSchema 
+        ? agent.input_schema?.map((field: any, index: number) => ({
+            id: field.id || `field_${Date.now()}_${Math.random().toString(36).substring(2, 11)}_${index}`,
+            name: field.name || '',
+            type: field.type || 'text',
+            label: field.label || '',
+            placeholder: field.placeholder || '',
+            required: Boolean(field.required),
+            options: Array.isArray(field.options) ? field.options : undefined,
+            acceptedFileTypes: field.acceptedFileTypes || undefined,
+            maxFileSize: field.maxFileSize || undefined,
+            multiple: field.multiple || undefined
+          })) || []
+        : []
+      
+      setFormFields(formattedFields)
+      setShowEditForm(true)
+      
+      console.log('✅ Agent loaded for editing successfully')
+      
+    } catch (error) {
+      console.error('❌ Error loading agent for edit:', error)
+      alert(`⚠️ Unable to edit "${agent.name}" - it may have an old data format.\n\nOptions:\n1. Use Delete button to remove it\n2. Create a new agent instead\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   const handleUpdateAgent = async (e: React.FormEvent) => {
@@ -415,6 +460,47 @@ export default function AdminPanel() {
     }
   }
 
+  const handleDeleteAgent = async (agentId: string, agentName: string) => {
+    if (!confirm(`⚠️ Are you sure you want to PERMANENTLY DELETE "${agentName}"?\n\nThis action cannot be undone. The agent will be removed from:\n- Marketplace\n- All user purchases\n- Database\n\nType "DELETE" to confirm.`)) {
+      return
+    }
+
+    const confirmText = prompt(`Type "DELETE" to confirm deletion of "${agentName}":`);
+    if (confirmText !== 'DELETE') {
+      alert('Deletion cancelled. You must type "DELETE" exactly to confirm.');
+      return
+    }
+
+    try {
+      setActionLoading(agentId)
+      
+      console.log('🗑️ Deleting agent and all related data:', agentId)
+      
+      // Delete related records first (to avoid foreign key constraints)
+      await supabase.from('user_agents').delete().eq('agent_id', agentId)
+      await supabase.from('agent_executions').delete().eq('agent_id', agentId)
+      
+      // Finally delete the agent
+      const { error } = await supabase
+        .from('agents')
+        .delete()
+        .eq('id', agentId)
+
+      if (error) throw error
+
+      console.log('✅ Agent deleted successfully')
+      alert(`✅ "${agentName}" has been permanently deleted from the marketplace.`)
+      
+      await loadAgents()
+      
+    } catch (error) {
+      console.error('Error deleting agent:', error)
+      alert(`❌ Failed to delete agent: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
@@ -428,7 +514,7 @@ export default function AdminPanel() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-black via-gray-900 to-black flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
         <div className="text-center text-white">
           <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
           <p>Admin access required</p>
@@ -438,7 +524,7 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-black via-gray-900 to-black">
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
       <div className="container mx-auto px-4 py-8">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-yellow-400 mb-2">🔧 ADMIN PANEL</h1>
@@ -569,8 +655,8 @@ export default function AdminPanel() {
               </div>
 
               {/* User Inputs Toggle */}
-              <div className="bg-gray-900/50 border border-gray-600 rounded-lg p-4">
-                <label className="flex items-center space-x-3 cursor-pointer">
+              <div className="bg-gray-900/50 border border-purple-500 rounded-lg p-4">
+                <label className="flex items-center space-x-3 cursor-pointer mb-4">
                   <input
                     type="checkbox"
                     checked={requiresInputs}
@@ -578,10 +664,266 @@ export default function AdminPanel() {
                     className="w-5 h-5 text-yellow-400 bg-gray-900 border-gray-600 rounded focus:ring-yellow-400"
                   />
                   <div>
-                    <span className="text-yellow-400 font-medium">🛠 This agent requires user inputs</span>
+                    <span className="text-purple-400 font-medium">🛠 This agent requires user inputs</span>
                     <p className="text-sm text-gray-400">Check this if users need to provide data before executing this agent</p>
                   </div>
                 </label>
+
+                {/* Input Fields Editor - ADD THIS SECTION */}
+                {requiresInputs && (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-lg text-purple-300 font-medium">Input Fields Configuration</h4>
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => addFormField('text')}
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded"
+                        >
+                          📝 Text
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addFormField('textarea')}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
+                        >
+                          📄 Textarea
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addFormField('select')}
+                          className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded"
+                        >
+                          📋 Dropdown
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addFormField('checkbox')}
+                          className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded"
+                        >
+                          ☑️ Checkbox
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addFormField('radio')}
+                          className="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white text-sm rounded"
+                        >
+                          🔘 Radio
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addFormField('number')}
+                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded"
+                        >
+                          🔢 Number
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addFormField('email')}
+                          className="px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded"
+                        >
+                          📧 Email
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addFormField('url')}
+                          className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white text-sm rounded"
+                        >
+                          🔗 URL
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addFormField('upload')}
+                          className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded"
+                        >
+                          📁 Upload
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Dynamic Form Fields */}
+                    <div className="space-y-4 max-h-80 overflow-y-auto">
+                      {formFields.map((field, index) => (
+                        <div key={field.id} className="border border-gray-600 rounded p-4 bg-gray-800">
+                          <div className="flex justify-between items-center mb-3">
+                            <h5 className="text-purple-300 font-medium">Field {index + 1}: {field.type}</h5>
+                            <div className="flex gap-2">
+                              {index > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => moveFormField(field.id, 'up')}
+                                  className="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded"
+                                >
+                                  ↑
+                                </button>
+                              )}
+                              {index < formFields.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => moveFormField(field.id, 'down')}
+                                  className="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded"
+                                >
+                                  ↓
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removeFormField(field.id)}
+                                className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-gray-300 mb-1">Field Name (API)</label>
+                              <input
+                                type="text"
+                                value={field.name}
+                                onChange={(e) => updateFormField(field.id, 'name', e.target.value)}
+                                placeholder="e.g., website_url"
+                                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-300 mb-1">Display Label</label>
+                              <input
+                                type="text"
+                                value={field.label}
+                                onChange={(e) => updateFormField(field.id, 'label', e.target.value)}
+                                placeholder="e.g., Website URL"
+                                className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="mt-3">
+                            <label className="block text-xs text-gray-300 mb-1">Placeholder</label>
+                            <input
+                              type="text"
+                              value={field.placeholder || ''}
+                              onChange={(e) => updateFormField(field.id, 'placeholder', e.target.value)}
+                              placeholder="e.g., https://your-website.com"
+                              className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                            />
+                          </div>
+
+                          {/* Options for select and radio fields */}
+                          {(field.type === 'select' || field.type === 'radio') && (
+                            <div className="mt-3">
+                              <label className="block text-xs text-gray-300 mb-1">Options</label>
+                              <div className="space-y-2">
+                                {field.options?.map((option, optionIndex) => (
+                                  <div key={optionIndex} className="flex gap-2">
+                                    <input
+                                      type="text"
+                                      value={option}
+                                      onChange={(e) => updateOption(field.id, optionIndex, e.target.value)}
+                                      placeholder={`Option ${optionIndex + 1}`}
+                                      className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                                    />
+                                    {field.options && field.options.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => removeOption(field.id, optionIndex)}
+                                        className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded"
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => addOption(field.id)}
+                                  className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded"
+                                >
+                                  + Add Option
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* File upload configuration */}
+                          {field.type === 'upload' && (
+                            <div className="mt-3 space-y-3">
+                              <div>
+                                <label className="block text-xs text-gray-300 mb-1">Accepted File Types</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {['Images (jpg,png,gif)', 'Documents (pdf)', 'Word Files (doc,docx)', 'Spreadsheets (csv,xlsx)', 'All Files (*)'].map((fileType, idx) => {
+                                    const values = ['image/*', 'application/pdf', '.doc,.docx', '.csv,.xlsx', '*'][idx]
+                                    return (
+                                      <label key={idx} className="flex items-center space-x-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={field.acceptedFileTypes?.includes(values) || false}
+                                          onChange={(e) => {
+                                            const currentTypes = field.acceptedFileTypes || []
+                                            const newTypes = e.target.checked 
+                                              ? [...currentTypes.filter(t => t !== values), values]
+                                              : currentTypes.filter(t => t !== values)
+                                            updateFormField(field.id, 'acceptedFileTypes', newTypes)
+                                          }}
+                                          className="w-3 h-3"
+                                        />
+                                        <span className="text-xs text-gray-300">{fileType}</span>
+                                      </label>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs text-gray-300 mb-1">Max File Size (MB)</label>
+                                  <input
+                                    type="number"
+                                    value={field.maxFileSize || 10}
+                                    onChange={(e) => updateFormField(field.id, 'maxFileSize', parseInt(e.target.value))}
+                                    min="1"
+                                    max="100"
+                                    className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                                  />
+                                </div>
+                                <div className="flex items-center">
+                                  <label className="flex items-center space-x-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={field.multiple || false}
+                                      onChange={(e) => updateFormField(field.id, 'multiple', e.target.checked)}
+                                      className="w-3 h-3"
+                                    />
+                                    <span className="text-xs text-gray-300">Allow Multiple Files</span>
+                                  </label>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="mt-3">
+                            <label className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                checked={field.required}
+                                onChange={(e) => updateFormField(field.id, 'required', e.target.checked)}
+                                className="w-4 h-4 text-red-500"
+                              />
+                              <span className="text-xs text-gray-300">Required field</span>
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {formFields.length === 0 && (
+                      <div className="text-center py-8 text-gray-500 text-sm">
+                        No input fields configured. Click the buttons above to add fields.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Active Toggle */}
@@ -723,27 +1065,69 @@ export default function AdminPanel() {
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
                           <h4 className="text-lg text-purple-300 font-medium">Input Fields Configuration</h4>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap">
                             <button
                               type="button"
                               onClick={() => addFormField('text')}
                               className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded"
                             >
-                              + Text Field
+                              📝 Text
                             </button>
                             <button
                               type="button"
                               onClick={() => addFormField('textarea')}
                               className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
                             >
-                              + Textarea
+                              📄 Textarea
                             </button>
                             <button
                               type="button"
                               onClick={() => addFormField('select')}
                               className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded"
                             >
-                              + Select
+                              📋 Dropdown
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => addFormField('checkbox')}
+                              className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded"
+                            >
+                              ☑️ Checkbox
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => addFormField('radio')}
+                              className="px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white text-sm rounded"
+                            >
+                              🔘 Radio
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => addFormField('number')}
+                              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded"
+                            >
+                              🔢 Number
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => addFormField('email')}
+                              className="px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded"
+                            >
+                              📧 Email
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => addFormField('url')}
+                              className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white text-sm rounded"
+                            >
+                              🔗 URL
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => addFormField('upload')}
+                              className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded"
+                            >
+                              📁 Upload
                             </button>
                           </div>
                         </div>
@@ -817,8 +1201,8 @@ export default function AdminPanel() {
                                 />
                               </div>
 
-                              {/* Options for select fields */}
-                              {field.type === 'select' && (
+                              {/* Options for select and radio fields */}
+                              {(field.type === 'select' || field.type === 'radio') && (
                                 <div className="mt-3">
                                   <label className="block text-xs text-gray-300 mb-1">Options</label>
                                   <div className="space-y-2">
@@ -849,6 +1233,62 @@ export default function AdminPanel() {
                                     >
                                       + Add Option
                                     </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* File upload configuration */}
+                              {field.type === 'upload' && (
+                                <div className="mt-3 space-y-3">
+                                  <div>
+                                    <label className="block text-xs text-gray-300 mb-1">Accepted File Types</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {['Images (jpg,png,gif)', 'Documents (pdf)', 'Word Files (doc,docx)', 'Spreadsheets (csv,xlsx)', 'All Files (*)'].map((fileType, idx) => {
+                                        const values = ['image/*', 'application/pdf', '.doc,.docx', '.csv,.xlsx', '*'][idx]
+                                        return (
+                                          <label key={idx} className="flex items-center space-x-2">
+                                            <input
+                                              type="checkbox"
+                                              checked={field.acceptedFileTypes?.includes(values) || false}
+                                              onChange={(e) => {
+                                                const currentTypes = field.acceptedFileTypes || []
+                                                const newTypes = e.target.checked 
+                                                  ? [...currentTypes.filter(t => t !== values), values]
+                                                  : currentTypes.filter(t => t !== values)
+                                                updateFormField(field.id, 'acceptedFileTypes', newTypes)
+                                              }}
+                                              className="w-3 h-3"
+                                            />
+                                            <span className="text-xs text-gray-300">{fileType}</span>
+                                          </label>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="block text-xs text-gray-300 mb-1">Max File Size (MB)</label>
+                                      <input
+                                        type="number"
+                                        value={field.maxFileSize || 10}
+                                        onChange={(e) => updateFormField(field.id, 'maxFileSize', parseInt(e.target.value))}
+                                        min="1"
+                                        max="100"
+                                        className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                                      />
+                                    </div>
+                                    <div className="flex items-center">
+                                      <label className="flex items-center space-x-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={field.multiple || false}
+                                          onChange={(e) => updateFormField(field.id, 'multiple', e.target.checked)}
+                                          className="w-3 h-3"
+                                        />
+                                        <span className="text-xs text-gray-300">Allow Multiple Files</span>
+                                      </label>
+                                    </div>
                                   </div>
                                 </div>
                               )}
@@ -987,6 +1427,14 @@ export default function AdminPanel() {
                             } disabled:opacity-50`}
                           >
                             {actionLoading === agent.id ? '...' : (agent.is_active ? '❌' : '✅')}
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteAgent(agent.id, agent.name)}
+                            disabled={actionLoading === agent.id}
+                            className="bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded text-sm transition-colors disabled:opacity-50"
+                          >
+                            🗑️
                           </button>
                         </div>
                       </td>
