@@ -1,117 +1,152 @@
-// Fixed src/app/api/razorpay/create-order/route.ts
-// Only creates Razorpay orders - NO database logging until payment success
+/**
+ * Create Razorpay Order Route
+ * Creates a Razorpay payment order with metadata
+ *
+ * Security Features:
+ * - Rate limiting (10 requests/minute)
+ * - Input validation with Zod
+ * - Standard error handling
+ * - Audit logging
+ * - Profile creation if needed
+ */
+
+import { NextRequest } from 'next/server';
 import Razorpay from 'razorpay';
-import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase/server';
+import {
+  asyncHandler,
+  successResponse,
+  AuthenticationError,
+  ValidationError,
+} from '@/lib/error-handler';
+import { createOrderSchema } from '@/lib/validation-schemas';
+import { withRateLimit, paymentRateLimiter } from '@/lib/rate-limiter';
+import { recordAuditLog } from '@/lib/database-utils';
+import {
+  PAYMENT,
+  ERROR_MESSAGES,
+  HTTP_STATUS,
+  AUDIT_LOG,
+  DATABASE,
+} from '@/lib/constants';
 
-export async function POST(req: Request) {
-  // Validate environment variables first
-  const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
-  const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+export const POST = withRateLimit(
+  paymentRateLimiter,
+  asyncHandler(async (req: NextRequest) => {
+    // 1. Validate environment variables
+    const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
 
-  console.log('🔑 Environment check:', {
-    razorpayKeyId: razorpayKeyId ? `${razorpayKeyId.substring(0, 8)}...` : 'MISSING',
-    razorpayKeySecret: razorpayKeySecret ? 'EXISTS' : 'MISSING',
-    nodeEnv: process.env.NODE_ENV
-  });
-
-  if (!razorpayKeyId || !razorpayKeySecret) {
-    console.error('❌ Razorpay environment variables are missing');
-    return NextResponse.json(
-      { 
-        error: 'Payment configuration error. Please contact support.',
-        debug: {
-          keyId: razorpayKeyId ? 'exists' : 'missing',
-          keySecret: razorpayKeySecret ? 'exists' : 'missing'
-        }
-      },
-      { status: 500 }
-    );
-  }
-
-  const razorpay = new Razorpay({
-    key_id: razorpayKeyId,
-    key_secret: razorpayKeySecret,
-  });
-
-  try {
-    const { packageId, amount, credits } = await req.json();
-
-    if (!packageId || !amount || !credits) {
-      return NextResponse.json(
-        { error: 'Missing packageId, amount or credits' },
-        { status: 400 }
-      );
+    if (!razorpayKeyId || !razorpayKeySecret) {
+      console.error('[PAYMENT] Razorpay credentials missing');
+      throw new Error('Payment configuration error. Please contact support.');
     }
 
+    // 2. Validate request body
+    const validatedData = await req.json().then((data) =>
+      createOrderSchema.parse(data)
+    );
+
+    const { packageId, amount, credits } = validatedData;
+
+    // 3. Authenticate user
     const supabase = await supabaseServer();
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    if (sessionError || !session?.user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    if (authError || !user) {
+      throw new AuthenticationError(ERROR_MESSAGES.AUTH.UNAUTHORIZED);
     }
 
-    const userId = session.user.id;
-    const userEmail = session.user.email ?? '';
+    const userId = user.id;
+    const userEmail = user.email ?? '';
 
-    // Ensure user profile exists (for foreign key constraints later)
+    // 4. Ensure user profile exists
     const { data: existingProfile } = await supabase
-      .from('profiles')
+      .from(DATABASE.TABLES.PROFILES)
       .select('id')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (!existingProfile) {
       // Create user profile if it doesn't exist
       const { error: profileError } = await supabase
-        .from('profiles')
+        .from(DATABASE.TABLES.PROFILES)
         .insert({
           id: userId,
           email: userEmail,
-          full_name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || userEmail.split('@')[0],
+          full_name:
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            userEmail.split('@')[0],
           credits: 0,
           total_spent: 0,
           total_executions: 0,
           membership_tier: 'free',
-          is_active: true
+          is_active: true,
         });
 
       if (profileError) {
-        console.error('Failed to create user profile:', profileError);
-        return NextResponse.json(
-          { error: 'Failed to create user profile' },
-          { status: 500 }
-        );
+        console.error('[PROFILE] Failed to create profile', profileError);
+        throw new Error('Failed to create user profile');
       }
+
+      console.log('[PROFILE] Created new profile', { user_id: userId });
     }
 
-    // Create Razorpay order ONLY - no database logging yet
+    // 5. Create Razorpay order
+    const razorpay = new Razorpay({
+      key_id: razorpayKeyId,
+      key_secret: razorpayKeySecret,
+    });
+
     const order = await razorpay.orders.create({
-      amount: Math.round(amount * 100),
-      currency: 'INR',
+      amount: Math.round(amount * PAYMENT.PAISE_MULTIPLIER),
+      currency: PAYMENT.DEFAULT_CURRENCY,
       receipt: `cp_${Date.now().toString().slice(-8)}`,
       notes: {
         user_id: userId,
         user_email: userEmail,
         package_id: packageId,
         credits: String(credits),
-        amount: String(amount) // Store original amount in notes for later use
+        amount: String(amount),
       },
     });
 
-    console.log('✅ Razorpay order created (no DB logging until payment success):', order.id);
+    console.log('[PAYMENT] Razorpay order created', {
+      order_id: order.id,
+      user_id: userId,
+      amount,
+      credits,
+    });
 
-    // Return only order ID - database insert happens in verify-payment API
-    return NextResponse.json({ orderId: order.id });
-    
-  } catch (err) {
-    console.error('create-order route error:', err);
-    return NextResponse.json(
-      { error: 'Failed to create Razorpay order' },
-      { status: 500 }
+    // 6. Record audit log
+    await recordAuditLog({
+      userId,
+      action: AUDIT_LOG.ACTION.CREATE,
+      resource: AUDIT_LOG.RESOURCE.PAYMENT,
+      resourceId: order.id,
+      details: {
+        order_id: order.id,
+        package_id: packageId,
+        amount,
+        credits,
+        currency: PAYMENT.DEFAULT_CURRENCY,
+      },
+      ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined,
+      userAgent: req.headers.get('user-agent') || undefined,
+    });
+
+    // 7. Return order ID
+    return successResponse(
+      {
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+      },
+      HTTP_STATUS.CREATED
     );
-  }
-}
+  })
+);

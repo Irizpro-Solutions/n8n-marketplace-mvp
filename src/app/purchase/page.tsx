@@ -4,6 +4,8 @@ import { useState, useEffect, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
+import ModernBackground from '@/components/layouts/ModernBackground'
+import ModernHeader from '@/components/layouts/ModernHeader'
 
 declare global {
   interface Window {
@@ -14,12 +16,14 @@ declare global {
 // Simple loading component for Suspense
 function LoadingPurchase() {
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin text-4xl text-yellow-400 mb-4">⟳</div>
-        <div className="text-white">Loading purchase page...</div>
+    <ModernBackground>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white text-lg">Loading purchase...</p>
+        </div>
       </div>
-    </div>
+    </ModernBackground>
   )
 }
 
@@ -201,128 +205,151 @@ function PurchasePageContent() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin text-4xl text-yellow-400 mb-4">⟳</div>
-          <div className="text-white">Checking authentication...</div>
+      <ModernBackground>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-white text-lg">Checking authentication...</p>
+          </div>
         </div>
-      </div>
+      </ModernBackground>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="max-w-md mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-yellow-400 mb-2">
-            ◉ PURCHASE CREDITS ◉
-          </h1>
-          <p className="text-gray-400">for {agentName}</p>
-        </div>
+    <ModernBackground>
+      <ModernHeader user={user} />
 
-        {/* Agent Card */}
-        <div className="bg-gray-900 border-2 border-purple-500 rounded-lg p-6 mb-6">
-          {/* Agent Header */}
-          <div className="flex items-center mb-4">
-            <div className="w-12 h-12 border-2 border-cyan-400 rounded flex items-center justify-center mr-4">
-              <span className="text-xl">🤖</span>
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-cyan-400">{agentName}</h2>
-              <div className="text-sm text-gray-400">
-                {isNewPurchase ? 'Initial Purchase' : 'Credit Top-up'}
-              </div>
-            </div>
+      <div className="pt-24 pb-16 px-6">
+        <div className="max-w-2xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-white mb-2">
+              Purchase Credits
+            </h1>
+            <p className="text-gray-400 text-lg">for {agentName}</p>
           </div>
 
-          {/* Purchase Details */}
-          <div className="space-y-4 mb-6">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">Cost per Credit:</span>
-              <span className="text-yellow-400 font-bold">₹{creditCost}</span>
+          {/* Main Purchase Card */}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 mb-6">
+            {/* Agent Header */}
+            <div className="flex items-center mb-6 pb-6 border-b border-white/10">
+              <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center mr-4">
+                <span className="text-2xl">🤖</span>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white">{agentName}</h2>
+                <div className="text-sm text-gray-400">
+                  {isNewPurchase ? 'Initial Purchase' : 'Credit Top-up'}
+                </div>
+              </div>
             </div>
 
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">Credits to Purchase:</span>
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => setCreditAmount(Math.max(1, creditAmount - 10))}
-                  className="w-10 h-10 border border-gray-500 text-gray-400 hover:bg-gray-800 transition-colors"
-                  disabled={loading}
-                >
-                  -
-                </button>
-                <span className="text-white font-bold text-xl w-20 text-center">
-                  {creditAmount}
+            {/* Purchase Details */}
+            <div className="space-y-6 mb-8">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Cost per Credit:</span>
+                <span className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">₹{creditCost}</span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">Credits to Purchase:</span>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => setCreditAmount(Math.max(1, creditAmount - 10))}
+                    className="w-10 h-10 bg-white/5 border border-white/10 text-white rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
+                    disabled={loading}
+                  >
+                    −
+                  </button>
+                  <span className="text-white font-bold text-2xl w-20 text-center">
+                    {creditAmount}
+                  </span>
+                  <button
+                    onClick={() => setCreditAmount(creditAmount + 10)}
+                    className="w-10 h-10 bg-white/5 border border-white/10 text-white rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
+                    disabled={loading}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-t border-white/10 pt-6">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-lg">Total Amount:</span>
+                  <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">₹{totalAmount}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Purchase Options */}
+            <div className="mb-8">
+              <h3 className="text-sm text-gray-400 mb-3">Quick Select:</h3>
+              <div className="grid grid-cols-3 gap-3">
+                {[10, 50, 100].map(amount => (
+                  <button
+                    key={amount}
+                    onClick={() => setCreditAmount(amount)}
+                    className={`py-3 px-4 rounded-lg font-semibold transition-all ${
+                      creditAmount === amount
+                        ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-lg shadow-purple-500/50'
+                        : 'bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
+                    }`}
+                    disabled={loading}
+                  >
+                    {amount}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment Button */}
+            <button
+              onClick={handlePayment}
+              disabled={loading}
+              className="w-full py-4 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold text-lg rounded-lg hover:shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing Payment...
                 </span>
-                <button
-                  onClick={() => setCreditAmount(creditAmount + 10)}
-                  className="w-10 h-10 border border-gray-500 text-gray-400 hover:bg-gray-800 transition-colors"
-                  disabled={loading}
-                >
-                  +
-                </button>
-              </div>
-            </div>
+              ) : (
+                'Proceed to Payment'
+              )}
+            </button>
 
-            <div className="border-t border-gray-600 pt-4">
-              <div className="flex justify-between items-center text-xl">
-                <span className="text-gray-400">Total Amount:</span>
-                <span className="text-yellow-400 font-bold">₹{totalAmount}</span>
-              </div>
+            {/* Security Notice */}
+            <div className="mt-6 p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+              <p className="text-green-200 text-sm flex items-center justify-center gap-2">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Secure payment powered by Razorpay
+              </p>
             </div>
           </div>
 
-          {/* Payment Button */}
-          <button
-            onClick={handlePayment}
-            disabled={loading}
-            className="w-full py-4 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-700 text-black font-bold text-lg border-2 border-yellow-400 transition-colors"
-          >
-            {loading ? 'PROCESSING PAYMENT...' : 'PROCEED TO PAYMENT'}
-          </button>
-
-          {/* Security Notice */}
-          <div className="mt-6 text-xs text-gray-500 text-center">
-            <p>🔒 Secure payment powered by Razorpay</p>
-            <p>Your payment information is encrypted and secure</p>
+          {/* Back Button */}
+          <div className="text-center">
+            <button
+              onClick={() => router.back()}
+              className="text-gray-400 hover:text-white transition-colors flex items-center gap-2 mx-auto"
+              disabled={loading}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Agents
+            </button>
           </div>
-        </div>
-
-        {/* Quick Purchase Options */}
-        <div className="mt-6 bg-gray-900 border border-purple-500 rounded-lg p-6">
-          <h3 className="text-lg text-purple-400 mb-4">◉ QUICK PURCHASE ◉</h3>
-          <div className="grid grid-cols-3 gap-3">
-            {[10, 50, 100].map(amount => (
-              <button
-                key={amount}
-                onClick={() => setCreditAmount(amount)}
-                className={`py-2 px-4 border transition-colors ${
-                  creditAmount === amount
-                    ? 'border-purple-400 bg-purple-900/20 text-purple-400'
-                    : 'border-gray-600 text-gray-400 hover:border-gray-400'
-                }`}
-                disabled={loading}
-              >
-                {amount}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Back Button */}
-        <div className="mt-6 text-center">
-          <button 
-            onClick={() => router.back()}
-            className="text-gray-400 hover:text-white transition-colors"
-            disabled={loading}
-          >
-            ← Back to Agent
-          </button>
         </div>
       </div>
-    </div>
+    </ModernBackground>
   )
 }
 

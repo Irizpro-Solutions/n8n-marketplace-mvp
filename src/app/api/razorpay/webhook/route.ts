@@ -1,130 +1,182 @@
+/**
+ * Razorpay Webhook Handler
+ * Processes payment notifications from Razorpay asynchronously
+ *
+ * Security Features:
+ * - Webhook signature verification (HMAC-SHA256)
+ * - Idempotency (duplicate webhook detection)
+ * - Atomic database operations
+ * - Standard error handling
+ * - Audit logging
+ *
+ * Note: This is a fallback. Primary payment processing happens in verify-payment route.
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '@/lib/supabase/admin';
+import {
+  asyncHandler,
+  successResponse,
+  PaymentError,
+  ValidationError,
+} from '@/lib/error-handler';
+import { recordAuditLog, getOrCreateDefaultPackage } from '@/lib/database-utils';
+import {
+  PAYMENT,
+  AGENT,
+  ERROR_MESSAGES,
+  HTTP_STATUS,
+  DATABASE,
+  AUDIT_LOG,
+} from '@/lib/constants';
 
-export const POST = async (req: NextRequest) => {
-  // Initialize Supabase admin client inside the handler to avoid build-time execution
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        persistSession: false,
-      },
-    }
-  );
-
-  // 1) Read raw body for signature verification
+export const POST = asyncHandler(async (req: NextRequest) => {
+  // 1. Verify webhook signature
   const rawBody = await req.text();
   const signature = req.headers.get('x-razorpay-signature') || '';
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET!;
 
-  // 2) Verify signature
+  if (!webhookSecret) {
+    console.error('[WEBHOOK] Webhook secret not configured');
+    throw new Error('Webhook configuration error');
+  }
+
   const expectedSignature = crypto
     .createHmac('sha256', webhookSecret)
     .update(rawBody)
     .digest('hex');
 
   if (expectedSignature !== signature) {
-    console.error('Invalid Razorpay webhook signature');
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+    console.error('[WEBHOOK][SECURITY] Invalid signature', {
+      received_signature: signature.substring(0, 10),
+      expected_signature: expectedSignature.substring(0, 10),
+    });
+
+    throw new PaymentError(ERROR_MESSAGES.PAYMENT.INVALID_SIGNATURE);
   }
 
-  // 3) Parse event
+  // 2. Parse webhook event
   let event: any;
   try {
     event = JSON.parse(rawBody);
   } catch (err) {
-    console.error('Failed to parse webhook body', err);
-    return NextResponse.json({ error: 'Bad payload' }, { status: 400 });
+    console.error('[WEBHOOK] Failed to parse payload', err);
+    throw new ValidationError('Invalid webhook payload');
   }
 
-  // We only care about successful payment
+  console.log('[WEBHOOK] Received event', {
+    event_type: event.event,
+    payment_id: event.payload?.payment?.entity?.id,
+  });
+
+  // 3. Only process payment.captured events
   if (event.event !== 'payment.captured') {
-    return NextResponse.json({ received: true }); // ignore others
+    console.log('[WEBHOOK] Ignoring non-payment event', { event_type: event.event });
+    return successResponse({ received: true }, HTTP_STATUS.OK);
   }
 
   const payment = event.payload.payment.entity;
 
-  // 4) Metadata from notes (we set this in create-order route)
+  // 4. Extract metadata from notes
   const notes = payment.notes || {};
   const userId: string | undefined = notes.user_id;
   const packageId: string | undefined = notes.package_id;
   const credits = Number(notes.credits || 0);
+  const amount = Number(notes.amount || 0);
 
-  if (!userId || !packageId || !credits) {
-    console.error('Missing metadata in webhook', { notes });
-    return NextResponse.json({ error: 'Missing metadata' }, { status: 400 });
+  if (!userId || !packageId || !credits || !amount) {
+    console.error('[WEBHOOK] Missing required metadata', { notes });
+    throw new ValidationError('Missing required payment metadata');
   }
 
-  const amount = payment.amount / 100; // Razorpay stores in paise
+  // 5. Handle agent purchase package ID
+  let finalPackageId = packageId;
+  let agentId: string | null = null;
 
-  try {
-    // 5) Insert into credit_purchases
-    const { data: purchase, error: purchaseError } = await supabaseAdmin
-      .from('credit_purchases')
-      .insert({
-        user_id: userId,
-        package_id: packageId,
-        amount,
-        currency: payment.currency,
-        razorpay_payment_id: payment.id,
-        razorpay_order_id: payment.order_id,
-        status: 'completed',
-      })
-      .select()
-      .single();
+  if (packageId.startsWith(AGENT.PACKAGE_PREFIX)) {
+    agentId = packageId.replace(AGENT.PACKAGE_PREFIX, '');
+    finalPackageId = await getOrCreateDefaultPackage(amount, credits);
+  }
 
-    if (purchaseError) {
-      console.error('Failed to insert credit_purchases', purchaseError);
-      throw purchaseError;
+  // 6. Process payment atomically (includes idempotency check)
+  const { data: result, error: rpcError } = await supabaseAdmin.rpc(
+    DATABASE.RPC.PROCESS_PAYMENT_ATOMIC,
+    {
+      p_user_id: userId,
+      p_package_id: finalPackageId,
+      p_razorpay_order_id: payment.order_id,
+      p_razorpay_payment_id: payment.id,
+      p_razorpay_signature: signature, // Store webhook signature
+      p_amount_paid: Math.round(amount * PAYMENT.PAISE_MULTIPLIER),
+      p_credits_purchased: credits,
+      p_agent_id: agentId,
     }
+  );
 
-    // 6) Insert into credit_transactions
-    const { error: txError } = await supabaseAdmin
-      .from('credit_transactions')
-      .insert({
+  // 7. Check result
+  if (rpcError || !result || !result.success) {
+    const errorMessage = rpcError?.message || result?.error || 'Unknown error';
+
+    // Webhook might arrive after verify-payment already processed it
+    if (errorMessage.includes('already processed')) {
+      console.log('[WEBHOOK] Payment already processed', {
+        payment_id: payment.id,
         user_id: userId,
-        change: credits,
-        type: 'purchase',
-        purchase_id: purchase.id,
       });
 
-    if (txError) {
-      console.error('Failed to insert credit_transactions', txError);
-      throw txError;
+      return successResponse(
+        {
+          success: true,
+          message: 'Payment already processed'
+        },
+        HTTP_STATUS.OK
+      );
     }
 
-    // 7) Update users.credits (simple: read then update)
-    const { data: userRow, error: userFetchError } = await supabaseAdmin
-      .from('users')
-      .select('credits')
-      .eq('id', userId)
-      .single();
+    console.error('[WEBHOOK] Payment processing failed', {
+      payment_id: payment.id,
+      error: errorMessage,
+    });
 
-    if (userFetchError) {
-      console.error('Failed to fetch user for credit update', userFetchError);
-      throw userFetchError;
-    }
-
-    const currentCredits = userRow?.credits ?? 0;
-    const newCredits = currentCredits + credits;
-
-    const { error: userUpdateError } = await supabaseAdmin
-      .from('users')
-      .update({ credits: newCredits })
-      .eq('id', userId);
-
-    if (userUpdateError) {
-      console.error('Failed to update user credits', userUpdateError);
-      throw userUpdateError;
-    }
-
-    console.log(`Credits updated for user ${userId}: +${credits} -> ${newCredits}`);
-
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error('Webhook processing error', err);
-    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
+    throw new PaymentError(errorMessage);
   }
-};
+
+  // 8. Log successful webhook processing
+  console.log('[WEBHOOK] Payment processed successfully', {
+    payment_id: payment.id,
+    user_id: userId,
+    credits_added: credits,
+    new_balance: result.new_balance,
+  });
+
+  // 9. Record audit log
+  await recordAuditLog({
+    userId,
+    action: AUDIT_LOG.ACTION.PAYMENT,
+    resource: AUDIT_LOG.RESOURCE.PAYMENT,
+    resourceId: result.purchase_id,
+    details: {
+      source: 'webhook',
+      event_type: event.event,
+      payment_id: payment.id,
+      order_id: payment.order_id,
+      credits_purchased: credits,
+      amount_paid: amount,
+      currency: payment.currency || PAYMENT.DEFAULT_CURRENCY,
+      agent_id: agentId,
+      new_balance: result.new_balance,
+    },
+    ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined,
+    userAgent: req.headers.get('user-agent') || undefined,
+  });
+
+  // 10. Return success
+  return successResponse(
+    {
+      success: true,
+      message: 'Webhook processed successfully',
+    },
+    HTTP_STATUS.OK
+  );
+});
