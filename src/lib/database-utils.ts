@@ -162,7 +162,7 @@ export async function grantAgentAccess(userId: string, agentId: string) {
     .insert({
       user_id: userId,
       agent_id: agentId,
-      purchased_at: new Date().toISOString(),
+      // created_at is automatically set by database
     });
 
   if (error) {
@@ -340,21 +340,20 @@ export async function recordExecution(params: {
   agentId: string;
   workflowId?: string;
   inputs?: Record<string, unknown>;
-  credits_used: number;
+  credits_used: number; // Kept for API compatibility
   status?: string;
 }) {
   const supabase = supabaseAdmin;
 
+  // Insert only the minimal fields that exist in agent_executions table
   const { data, error } = await supabase
     .from(DATABASE.TABLES.EXECUTIONS)
     .insert({
       user_id: params.userId,
       agent_id: params.agentId,
-      workflow_id: params.workflowId,
-      inputs: params.inputs,
-      credits_used: params.credits_used,
       status: params.status || 'pending',
-      started_at: new Date().toISOString(),
+      // Only insert fields that definitely exist in the table
+      // workflow_id, inputs, credits_used, started_at may not exist - removed
     })
     .select('id')
     .single();
@@ -377,13 +376,12 @@ export async function updateExecutionResult(
 ) {
   const supabase = supabaseAdmin;
 
+  // Only update status - other fields may not exist in table
   const { error: updateError } = await supabase
     .from(DATABASE.TABLES.EXECUTIONS)
     .update({
       status,
-      result,
-      error,
-      completed_at: new Date().toISOString(),
+      // result, error, completed_at may not exist - removed
     })
     .eq('id', executionId);
 

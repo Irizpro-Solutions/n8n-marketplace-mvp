@@ -13,6 +13,7 @@ export interface PricingConfig {
     credit_cost: number
     webhook_url?: string
     input_schema?: any[]
+    credential_fields?: string[]  // Array of credential field titles (e.g., ["OpenAI API Key", "WordPress URL"])
     is_active: boolean
     created_at: string
     updated_at: string

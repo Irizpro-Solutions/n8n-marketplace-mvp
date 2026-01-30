@@ -72,6 +72,7 @@ export const POST = withRateLimit(
 
     if (!existingProfile) {
       // Create user profile if it doesn't exist
+      const now = new Date().toISOString();
       const { error: profileError } = await supabase
         .from(DATABASE.TABLES.PROFILES)
         .insert({
@@ -86,11 +87,22 @@ export const POST = withRateLimit(
           total_executions: 0,
           membership_tier: 'free',
           is_active: true,
+          role: 'user', // Add role field
+          created_at: now,
+          updated_at: now,
         });
 
       if (profileError) {
-        console.error('[PROFILE] Failed to create profile', profileError);
-        throw new Error('Failed to create user profile');
+        console.error('[PROFILE] Failed to create profile:', {
+          error: profileError,
+          code: profileError.code,
+          message: profileError.message,
+          details: profileError.details,
+          hint: profileError.hint,
+          userId,
+          userEmail,
+        });
+        throw new Error(`Failed to create user profile: ${profileError.message}`);
       }
 
       console.log('[PROFILE] Created new profile', { user_id: userId });

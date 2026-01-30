@@ -6,6 +6,7 @@ import { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import ModernBackground from '@/components/layouts/ModernBackground'
 import ModernHeader from '@/components/layouts/ModernHeader'
+import CustomPlatformModal from '@/components/admin/CustomPlatformModal'
 
 // Import proper interfaces
 interface PricingConfig {
@@ -22,6 +23,8 @@ interface Agent {
   icon_url?: string
   webhook_url?: string
   input_schema?: any[]
+  required_platforms?: string[]
+  credential_fields?: string[] // Legacy
   is_active: boolean
   created_at: string
   updated_at: string
@@ -68,6 +71,14 @@ export default function AdminPanel() {
     customPrices: {}
   })
 
+  // Credential fields state (legacy)
+  const [credentialFields, setCredentialFields] = useState<string[]>([])
+
+  // Platform-based credential state
+  const [availablePlatforms, setAvailablePlatforms] = useState<any[]>([])
+  const [requiredPlatforms, setRequiredPlatforms] = useState<string[]>([])
+  const [showCustomPlatformModal, setShowCustomPlatformModal] = useState(false)
+
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -76,6 +87,7 @@ export default function AdminPanel() {
   useEffect(() => {
     checkAdmin()
     loadAgents()
+    loadAvailablePlatforms()
 
     const cleanup = setupRealtimeSubscription()
     return cleanup
@@ -136,6 +148,24 @@ export default function AdminPanel() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const loadAvailablePlatforms = async () => {
+    try {
+      const response = await fetch('/api/credentials/platforms')
+      if (response.ok) {
+        const data = await response.json()
+        setAvailablePlatforms(data.platforms || [])
+      }
+    } catch (error) {
+      console.error('Error loading platforms:', error)
+    }
+  }
+
+  const handlePlatformCreated = (platform: any) => {
+    // Reload platforms to include the new custom platform
+    loadAvailablePlatforms()
+    alert(`Custom platform "${platform.platform_name}" created successfully!`)
   }
 
   const addFormField = (type: FormField['type']) => {
@@ -296,6 +326,8 @@ export default function AdminPanel() {
     })
     setRequiresInputs(false)
     setFormFields([])
+    setCredentialFields([])
+    setRequiredPlatforms([])
     setShowForm(false)
   }
 
@@ -320,6 +352,7 @@ export default function AdminPanel() {
       setSubmitting(true)
 
       const inputSchema = requiresInputs ? generateInputSchema() : []
+      const credFields = credentialFields.filter(f => f.trim()) // Filter out empty fields (legacy)
 
       const { data, error } = await supabase
         .from('agents')
@@ -330,6 +363,8 @@ export default function AdminPanel() {
           webhook_url: formData.webhook_url.trim(),
           is_active: formData.is_active,
           input_schema: inputSchema,
+          credential_fields: credFields.length > 0 ? credFields : null, // Legacy
+          required_platforms: requiredPlatforms.length > 0 ? requiredPlatforms : null,
           credit_cost: agentPricing.basePrice,
           pricing_config: agentPricing
         })
@@ -386,6 +421,13 @@ export default function AdminPanel() {
         : []
 
       setFormFields(formattedFields)
+
+      // Load credential fields (legacy)
+      setCredentialFields(agent.credential_fields || [])
+
+      // Load required platforms (platform-based system)
+      setRequiredPlatforms(agent.required_platforms || [])
+
       setShowEditForm(true)
 
       console.log('Agent loaded for editing successfully')
@@ -405,6 +447,7 @@ export default function AdminPanel() {
       setSubmitting(true)
 
       const inputSchema = requiresInputs ? generateInputSchema() : []
+      const credFields = credentialFields.filter(f => f.trim()) // Filter out empty fields (legacy)
 
       const { error } = await supabase
         .from('agents')
@@ -415,6 +458,8 @@ export default function AdminPanel() {
           webhook_url: formData.webhook_url.trim(),
           is_active: formData.is_active,
           input_schema: inputSchema,
+          credential_fields: credFields.length > 0 ? credFields : null, // Legacy
+          required_platforms: requiredPlatforms.length > 0 ? requiredPlatforms : null,
           credit_cost: agentPricing.basePrice,
           pricing_config: agentPricing
         })
@@ -862,6 +907,74 @@ export default function AdminPanel() {
                   )}
                 </div>
 
+                {/* Required Platforms Configuration */}
+                <div className="bg-white/5 border border-orange-500/50 rounded-lg p-4">
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h4 className="text-lg text-orange-300 font-medium mb-2">🔐 Required Credentials (Optional)</h4>
+                      <p className="text-sm text-gray-400">
+                        Select which credential platforms users need to connect before using this agent.
+                        Users will be prompted to provide these credentials after purchase.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomPlatformModal(true)}
+                      className="px-3 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm font-medium rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all whitespace-nowrap"
+                    >
+                      ➕ Custom Platform
+                    </button>
+                  </div>
+
+                  {availablePlatforms.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {availablePlatforms.map((platform) => (
+                        <label
+                          key={platform.platform_slug}
+                          className="flex items-start gap-3 p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 cursor-pointer transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={requiredPlatforms.includes(platform.platform_slug)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setRequiredPlatforms([...requiredPlatforms, platform.platform_slug])
+                              } else {
+                                setRequiredPlatforms(requiredPlatforms.filter(p => p !== platform.platform_slug))
+                              }
+                            }}
+                            className="mt-1 w-4 h-4 text-orange-400 bg-white/5 border-white/10 rounded focus:ring-orange-500"
+                          />
+                          <div className="flex-1">
+                            <div className="text-white font-medium">{platform.platform_name}</div>
+                            {platform.description && (
+                              <div className="text-xs text-gray-500 mt-1">{platform.description}</div>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-gray-500 text-sm">
+                      Loading available platforms...
+                    </div>
+                  )}
+
+                  {requiredPlatforms.length === 0 && availablePlatforms.length > 0 && (
+                    <div className="text-center py-4 text-gray-500 text-sm mt-3">
+                      No platforms selected. This agent will not require any credentials.
+                    </div>
+                  )}
+
+                  {requiredPlatforms.length > 0 && (
+                    <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-300">
+                      <strong>Selected:</strong> {requiredPlatforms.map(slug =>
+                        availablePlatforms.find(p => p.platform_slug === slug)?.platform_name || slug
+                      ).join(', ')}
+                    </div>
+                  )}
+                </div>
+
                 {/* Active Toggle */}
                 <div className="flex items-center space-x-3">
                   <input
@@ -1014,7 +1127,6 @@ export default function AdminPanel() {
                           <div className="space-y-4 max-h-60 overflow-y-auto">
                             {formFields.map((field, index) => (
                               <div key={field.id} className="bg-white/5 border border-white/10 rounded-lg p-4">
-                                {/* Same field editor as create form - abbreviated for space */}
                                 <div className="flex justify-between items-center mb-3">
                                   <h5 className="text-purple-300 font-medium">Field {index + 1}: {field.type}</h5>
                                   <div className="flex gap-2">
@@ -1023,7 +1135,136 @@ export default function AdminPanel() {
                                     <button type="button" onClick={() => removeFormField(field.id)} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded">✕</button>
                                   </div>
                                 </div>
-                                {/* Rest of field configuration same as create form */}
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="block text-xs text-gray-300 mb-1">Field Name (API)</label>
+                                    <input
+                                      type="text"
+                                      value={field.name}
+                                      onChange={(e) => updateFormField(field.id, 'name', e.target.value)}
+                                      placeholder="e.g., website_url"
+                                      className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-white text-sm"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-gray-300 mb-1">Display Label</label>
+                                    <input
+                                      type="text"
+                                      value={field.label}
+                                      onChange={(e) => updateFormField(field.id, 'label', e.target.value)}
+                                      placeholder="e.g., Website URL"
+                                      className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-white text-sm"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="mt-3">
+                                  <label className="block text-xs text-gray-300 mb-1">Placeholder</label>
+                                  <input
+                                    type="text"
+                                    value={field.placeholder || ''}
+                                    onChange={(e) => updateFormField(field.id, 'placeholder', e.target.value)}
+                                    placeholder="e.g., https://your-website.com"
+                                    className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-white text-sm"
+                                  />
+                                </div>
+
+                                {/* Options for select/radio */}
+                                {(field.type === 'select' || field.type === 'radio') && (
+                                  <div className="mt-3">
+                                    <label className="block text-xs text-gray-300 mb-1">Options</label>
+                                    <div className="space-y-2">
+                                      {field.options?.map((option, optionIndex) => (
+                                        <div key={optionIndex} className="flex gap-2">
+                                          <input
+                                            type="text"
+                                            value={option}
+                                            onChange={(e) => updateOption(field.id, optionIndex, e.target.value)}
+                                            placeholder={`Option ${optionIndex + 1}`}
+                                            className="flex-1 bg-white/5 border border-white/10 rounded px-3 py-2 text-white text-sm"
+                                          />
+                                          {field.options && field.options.length > 1 && (
+                                            <button type="button" onClick={() => removeOption(field.id, optionIndex)} className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded">
+                                              ✕
+                                            </button>
+                                          )}
+                                        </div>
+                                      ))}
+                                      <button type="button" onClick={() => addOption(field.id)} className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded">
+                                        + Add Option
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* File upload configuration */}
+                                {field.type === 'upload' && (
+                                  <div className="mt-3 space-y-3">
+                                    <div>
+                                      <label className="block text-xs text-gray-300 mb-1">Accepted File Types</label>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        {['Images (jpg,png,gif)', 'Documents (pdf)', 'Word Files (doc,docx)', 'Spreadsheets (csv,xlsx)', 'All Files (*)'].map((fileType, idx) => {
+                                          const values = ['image/*', 'application/pdf', '.doc,.docx', '.csv,.xlsx', '*'][idx]
+                                          return (
+                                            <label key={idx} className="flex items-center space-x-2">
+                                              <input
+                                                type="checkbox"
+                                                checked={field.acceptedFileTypes?.includes(values) || false}
+                                                onChange={(e) => {
+                                                  const currentTypes = field.acceptedFileTypes || []
+                                                  const newTypes = e.target.checked
+                                                    ? [...currentTypes.filter(t => t !== values), values]
+                                                    : currentTypes.filter(t => t !== values)
+                                                  updateFormField(field.id, 'acceptedFileTypes', newTypes)
+                                                }}
+                                                className="w-3 h-3"
+                                              />
+                                              <span className="text-xs text-gray-300">{fileType}</span>
+                                            </label>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div>
+                                        <label className="block text-xs text-gray-300 mb-1">Max File Size (MB)</label>
+                                        <input
+                                          type="number"
+                                          value={field.maxFileSize || 10}
+                                          onChange={(e) => updateFormField(field.id, 'maxFileSize', parseInt(e.target.value))}
+                                          min="1"
+                                          max="100"
+                                          className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-white text-sm"
+                                        />
+                                      </div>
+                                      <div className="flex items-center">
+                                        <label className="flex items-center space-x-2">
+                                          <input
+                                            type="checkbox"
+                                            checked={field.multiple || false}
+                                            onChange={(e) => updateFormField(field.id, 'multiple', e.target.checked)}
+                                            className="w-3 h-3"
+                                          />
+                                          <span className="text-xs text-gray-300">Allow Multiple Files</span>
+                                        </label>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="mt-3">
+                                  <label className="flex items-center space-x-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={field.required}
+                                      onChange={(e) => updateFormField(field.id, 'required', e.target.checked)}
+                                      className="w-4 h-4 text-red-500"
+                                    />
+                                    <span className="text-xs text-gray-300">Required field</span>
+                                  </label>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -1033,6 +1274,74 @@ export default function AdminPanel() {
                               No input fields configured. Click the buttons above to add fields.
                             </div>
                           )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Required Platforms Configuration */}
+                    <div className="bg-white/5 border border-orange-500/50 rounded-lg p-4">
+                      <div className="mb-4 flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <h4 className="text-lg text-orange-300 font-medium mb-2">🔐 Required Credentials (Optional)</h4>
+                          <p className="text-sm text-gray-400">
+                            Select which credential platforms users need to connect before using this agent.
+                            Users will be prompted to provide these credentials after purchase.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowCustomPlatformModal(true)}
+                          className="px-3 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm font-medium rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all whitespace-nowrap"
+                        >
+                          ➕ Custom Platform
+                        </button>
+                      </div>
+
+                      {availablePlatforms.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {availablePlatforms.map((platform) => (
+                            <label
+                              key={platform.platform_slug}
+                              className="flex items-start gap-3 p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 cursor-pointer transition-colors"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={requiredPlatforms.includes(platform.platform_slug)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setRequiredPlatforms([...requiredPlatforms, platform.platform_slug])
+                                  } else {
+                                    setRequiredPlatforms(requiredPlatforms.filter(p => p !== platform.platform_slug))
+                                  }
+                                }}
+                                className="mt-1 w-4 h-4 text-orange-400 bg-white/5 border-white/10 rounded focus:ring-orange-500"
+                              />
+                              <div className="flex-1">
+                                <div className="text-white font-medium">{platform.platform_name}</div>
+                                {platform.description && (
+                                  <div className="text-xs text-gray-500 mt-1">{platform.description}</div>
+                                )}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 text-gray-500 text-sm">
+                          Loading available platforms...
+                        </div>
+                      )}
+
+                      {requiredPlatforms.length === 0 && availablePlatforms.length > 0 && (
+                        <div className="text-center py-4 text-gray-500 text-sm mt-3">
+                          No platforms selected. This agent will not require any credentials.
+                        </div>
+                      )}
+
+                      {requiredPlatforms.length > 0 && (
+                        <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-300">
+                          <strong>Selected:</strong> {requiredPlatforms.map(slug =>
+                            availablePlatforms.find(p => p.platform_slug === slug)?.platform_name || slug
+                          ).join(', ')}
                         </div>
                       )}
                     </div>
@@ -1167,6 +1476,13 @@ export default function AdminPanel() {
           </div>
         </div>
       </div>
+
+      {/* Custom Platform Modal */}
+      <CustomPlatformModal
+        isOpen={showCustomPlatformModal}
+        onClose={() => setShowCustomPlatformModal(false)}
+        onPlatformCreated={handlePlatformCreated}
+      />
     </ModernBackground>
   )
 }

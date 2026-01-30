@@ -221,6 +221,16 @@ export const ERROR_MESSAGES = {
     EXCEEDED: 'Rate limit exceeded, please try again later',
   },
 
+  // Credentials
+  CREDENTIALS: {
+    MISSING_CONNECTION: 'This agent requires credentials. Please configure them first.',
+    INVALID_CREDENTIALS: 'Invalid credentials provided',
+    ENCRYPTION_FAILED: 'Failed to encrypt credentials',
+    DECRYPTION_FAILED: 'Failed to decrypt credentials',
+    STORAGE_FAILED: 'Failed to save credentials',
+    NOT_FOUND: 'Credentials not found for this agent',
+  },
+
   // Generic
   GENERIC: {
     INTERNAL_ERROR: 'An internal error occurred',
@@ -254,6 +264,28 @@ export const SUCCESS_MESSAGES = {
 } as const;
 
 // ============================================
+// CREDENTIALS
+// ============================================
+
+export const CREDENTIAL = {
+  // Encryption configuration
+  ENCRYPTION: {
+    ALGORITHM: 'aes-256-gcm',
+    IV_LENGTH: 16,
+    TAG_LENGTH: 16,
+    KEY_VERSION: 1,
+  } as const,
+
+  // Field types for credential inputs
+  FIELD_TYPES: {
+    TEXT: 'text',
+    PASSWORD: 'password',
+    URL: 'url',
+    EMAIL: 'email',
+  } as const,
+} as const;
+
+// ============================================
 // DATABASE
 // ============================================
 
@@ -266,9 +298,10 @@ export const DATABASE = {
     CREDIT_PURCHASES: 'credit_purchases',
     CREDIT_TRANSACTIONS: 'credit_transactions',
     USER_AGENTS: 'user_agents',
-    EXECUTIONS: 'executions',
+    EXECUTIONS: 'agent_executions', // Actual table name in database
     WORKFLOWS: 'workflows',
     AUDIT_LOGS: 'audit_logs',
+    USER_AGENT_CREDENTIALS: 'user_agent_credentials',
   } as const,
 
   // RPC function names

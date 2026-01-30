@@ -37,14 +37,80 @@ import {
   EXECUTION,
   AUDIT_LOG,
   API,
+  USER,
 } from '@/lib/constants';
+import { retrieveAllAgentCredentials } from '@/lib/credential-manager';
 
 /**
- * Calls n8n workflow with timeout and error handling
+ * Calls n8n webhook directly with timeout and error handling
+ * Formats payload for webhook-triggered workflows
+ */
+async function callN8nWebhook(
+  webhookUrl: string,
+  inputs: Record<string, unknown>,
+  credentials?: Record<string, any>,
+  userId?: string,
+  userEmail?: string
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API.TIMEOUT.N8N_REQUEST);
+
+  try {
+    // Build n8n webhook payload
+    // This is the structure your n8n webhook will receive
+    const payload: any = {
+      // User inputs (form data)
+      inputs: inputs,
+
+      // User context
+      user: {
+        id: userId,
+        email: userEmail,
+      },
+    };
+
+    // Inject credentials if provided (grouped by platform)
+    if (credentials && Object.keys(credentials).length > 0) {
+      payload.credentials = credentials;
+    }
+
+    console.log('[N8N] Calling webhook', {
+      webhook_url: webhookUrl,
+      has_credentials: !!credentials,
+      credential_platforms: credentials ? Object.keys(credentials) : [],
+      input_count: Object.keys(inputs).length,
+    });
+
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`n8n webhook error ${res.status}: ${errorText}`);
+    }
+
+    return await res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Calls n8n workflow via API with timeout and error handling
+ * @deprecated Use callN8nWebhook instead for webhook-triggered workflows
  */
 async function callN8nWorkflow(
   n8nWorkflowId: string | number,
-  inputs: Record<string, unknown>
+  inputs: Record<string, unknown>,
+  credentials?: Record<string, any>,
+  userId?: string,
+  userEmail?: string
 ) {
   const N8N_API_URL = process.env.N8N_API_URL;
   const N8N_API_KEY = process.env.N8N_API_KEY;
@@ -57,6 +123,30 @@ async function callN8nWorkflow(
   const timeout = setTimeout(() => controller.abort(), API.TIMEOUT.N8N_REQUEST);
 
   try {
+    // Build n8n webhook payload
+    // This is the structure your n8n webhook will receive
+    const payload: any = {
+      // User inputs (form data)
+      inputs: inputs,
+
+      // User context
+      user: {
+        id: userId,
+        email: userEmail,
+      },
+    };
+
+    // Inject credentials if provided (grouped by platform)
+    if (credentials && Object.keys(credentials).length > 0) {
+      payload.credentials = credentials;
+    }
+
+    console.log('[N8N] Calling workflow', {
+      workflow_id: n8nWorkflowId,
+      has_credentials: !!credentials,
+      credential_platforms: credentials ? Object.keys(credentials) : [],
+    });
+
     const res = await fetch(
       `${N8N_API_URL}/api/v1/workflows/${n8nWorkflowId}/run`,
       {
@@ -65,7 +155,7 @@ async function callN8nWorkflow(
           'Content-Type': 'application/json',
           'X-N8N-API-KEY': N8N_API_KEY,
         },
-        body: JSON.stringify({ input: inputs }),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       }
     );
@@ -102,89 +192,139 @@ export const POST = withRateLimit(
       throw new AuthenticationError(ERROR_MESSAGES.AUTH.UNAUTHORIZED);
     }
 
-    // 3. Get agent details
+    // 3. Check if user is admin
+    const isAdmin = user.email === USER.ADMIN.EMAIL;
+
+    // 4. Get agent details
     const agent = await getAgentById(agentId);
 
     if (!agent.is_active) {
       throw new ResourceNotFoundError(ERROR_MESSAGES.WORKFLOW.AGENT_INACTIVE);
     }
 
-    // 4. Verify user has purchased this agent
-    const hasPurchased = await hasUserPurchasedAgent(user.id, agentId);
+    // 5. Verify user has purchased this agent (skip for admin)
+    if (!isAdmin) {
+      const hasPurchased = await hasUserPurchasedAgent(user.id, agentId);
 
-    if (!hasPurchased) {
-      throw new PaymentError(
-        'You must purchase this agent before using it',
-        'AGENT_NOT_PURCHASED'
-      );
+      if (!hasPurchased) {
+        throw new PaymentError(
+          'You must purchase this agent before using it',
+          'AGENT_NOT_PURCHASED'
+        );
+      }
     }
 
-    // 5. Get n8n workflow ID
-    const { data: workflow } = await supabase
-      .from(DATABASE.TABLES.WORKFLOWS)
-      .select('n8n_workflow_id')
-      .eq('agent_id', agentId)
-      .maybeSingle();
+    // 6. Get webhook URL from agent
+    const webhookUrl = agent.webhook_url;
 
-    if (!workflow?.n8n_workflow_id) {
-      throw new ResourceNotFoundError('Workflow configuration not found');
+    if (!webhookUrl || !webhookUrl.trim()) {
+      throw new ResourceNotFoundError('Webhook URL not configured for this agent');
     }
 
-    const creditCost = agent.credit_cost || 0;
+    const creditCost = isAdmin ? 0 : (agent.credit_cost || 0);
 
-    // 6. Create execution record (pending status)
+    // 7. Create execution record (pending status)
     const executionId = await recordExecution({
       userId: user.id,
       agentId: agent.id,
-      workflowId: workflow.n8n_workflow_id.toString(),
+      workflowId: webhookUrl, // Store webhook URL for reference
       inputs,
       credits_used: creditCost,
       status: EXECUTION.STATUS.PENDING,
     });
 
-    // 7. Atomically deduct credits (prevents race conditions)
-    const { data: deductResult, error: rpcError } = await supabaseAdmin.rpc(
-      DATABASE.RPC.DEDUCT_CREDITS_ATOMIC,
-      {
-        p_user_id: user.id,
-        p_amount: creditCost,
-        p_agent_id: agentId,
-        p_execution_id: executionId,
-      }
-    );
+    // 8. Deduct credits (skip for admin)
+    let deductResult: any = { success: true, new_balance: 0 };
 
-    // 8. Check if deduction was successful
-    if (rpcError || !deductResult || !deductResult.success) {
-      const errorMessage = rpcError?.message || deductResult?.error || 'Unknown error';
-
-      // Update execution with failure
-      await updateExecutionResult(
-        executionId,
-        EXECUTION.STATUS.FAILED,
-        null,
-        `Credit deduction failed: ${errorMessage}`
+    if (!isAdmin && creditCost > 0) {
+      // Atomically deduct credits (prevents race conditions)
+      const { data: result, error: rpcError } = await supabaseAdmin.rpc(
+        DATABASE.RPC.DEDUCT_CREDITS_ATOMIC,
+        {
+          p_user_id: user.id,
+          p_amount: creditCost,
+          p_agent_id: agentId,
+          p_execution_id: executionId,
+        }
       );
 
-      // Check if insufficient credits
-      if (errorMessage.includes('Insufficient credits')) {
-        throw new PaymentError(
-          ERROR_MESSAGES.PAYMENT.INSUFFICIENT_CREDITS,
-          'INSUFFICIENT_CREDITS'
+      // Check if deduction was successful
+      if (rpcError || !result || !result.success) {
+        const errorMessage = rpcError?.message || result?.error || 'Unknown error';
+
+        // Update execution with failure
+        await updateExecutionResult(
+          executionId,
+          EXECUTION.STATUS.FAILED,
+          null,
+          `Credit deduction failed: ${errorMessage}`
         );
+
+        // Check if insufficient credits
+        if (errorMessage.includes('Insufficient credits')) {
+          throw new PaymentError(
+            ERROR_MESSAGES.PAYMENT.INSUFFICIENT_CREDITS,
+            'INSUFFICIENT_CREDITS'
+          );
+        }
+
+        throw new PaymentError(errorMessage);
       }
 
-      throw new PaymentError(errorMessage);
+      deductResult = result;
+
+      console.log('[WORKFLOW] Credits deducted successfully', {
+        user_id: user.id,
+        agent_id: agentId,
+        credits_deducted: creditCost,
+        new_balance: deductResult.new_balance,
+        execution_id: executionId,
+      });
+    } else if (isAdmin) {
+      console.log('[WORKFLOW] Admin user - skipping credit deduction', {
+        user_id: user.id,
+        agent_id: agentId,
+        execution_id: executionId,
+      });
     }
 
-    console.log('[WORKFLOW] Credits deducted successfully', {
-      user_id: user.id,
-      agent_id: agentId,
-      credits_deducted: creditCost,
-      new_balance: deductResult.new_balance,
-      execution_id: executionId,
-    });
+    // 9. Retrieve user credentials for this agent (platform-based)
+    let userCredentials: Record<string, any> | undefined;
+    try {
+      const credentialMap = await retrieveAllAgentCredentials(user.id, agentId);
 
-    // 9. Execute n8n workflow
+      if (Object.keys(credentialMap).length > 0) {
+        // Transform credential map to n8n-friendly format
+        // From: { "wordpress": { platform: "wordpress", type: "basic_auth", credentials: {...} } }
+        // To: { "wordpress": { site_url: "...", username: "...", application_password: "..." } }
+        userCredentials = {};
+
+        for (const [platformSlug, credData] of Object.entries(credentialMap)) {
+          userCredentials[platformSlug] = {
+            ...credData.credentials,  // Spread the actual credential values
+            ...(credData.metadata || {}),  // Add metadata (site_url, account_name, etc.)
+          };
+        }
+
+        console.log('[CREDENTIALS] User credentials retrieved for agent', {
+          agent_id: agentId,
+          platforms: Object.keys(credentialMap),
+          credential_count: Object.keys(credentialMap).length,
+        });
+      } else {
+        console.log('[CREDENTIALS] No credentials found for agent', {
+          agent_id: agentId,
+        });
+      }
+    } catch (error) {
+      console.warn('[CREDENTIALS] Failed to retrieve credentials', {
+        agent_id: agentId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      // Continue without credentials (agent may not require them)
+    }
+
+    // 10. Execute n8n workflow
     let workflowResult;
     let executionStatus: string = EXECUTION.STATUS.SUCCESS;
     let executionError: string | undefined;
@@ -198,7 +338,13 @@ export const POST = withRateLimit(
         undefined
       );
 
-      workflowResult = await callN8nWorkflow(workflow.n8n_workflow_id, inputs);
+      workflowResult = await callN8nWebhook(
+        webhookUrl,
+        inputs,
+        userCredentials,
+        user.id,
+        user.email
+      );
 
       console.log('[WORKFLOW] Execution completed successfully', {
         execution_id: executionId,
@@ -217,7 +363,7 @@ export const POST = withRateLimit(
       // You may want to implement a refund policy here
     }
 
-    // 10. Update execution with result
+    // 11. Update execution with result
     await updateExecutionResult(
       executionId,
       executionStatus,
@@ -225,7 +371,7 @@ export const POST = withRateLimit(
       executionError
     );
 
-    // 11. Record audit log
+    // 12. Record audit log
     await recordAuditLog({
       userId: user.id,
       action: AUDIT_LOG.ACTION.WORKFLOW_EXECUTION,
@@ -243,7 +389,7 @@ export const POST = withRateLimit(
       userAgent: req.headers.get('user-agent') || undefined,
     });
 
-    // 12. Return result
+    // 13. Return result
     if (executionStatus === EXECUTION.STATUS.FAILED) {
       throw new Error(
         executionError || ERROR_MESSAGES.WORKFLOW.EXECUTION_FAILED

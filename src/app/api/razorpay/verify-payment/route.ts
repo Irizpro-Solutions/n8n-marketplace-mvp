@@ -126,14 +126,53 @@ export const POST = withRateLimit(
     if (rpcError || !result || !result.success) {
       const errorMessage = rpcError?.message || result?.error || 'Unknown error';
 
-      // Check if duplicate payment
+      // Check if duplicate payment (webhook already processed it)
       if (errorMessage.includes('already processed')) {
-        console.warn('[PAYMENT] Duplicate payment detected', {
+        console.log('[PAYMENT] Payment already processed (likely by webhook)', {
           payment_id: razorpay_payment_id,
           user_id: user.id,
         });
 
-        throw new DuplicateResourceError(ERROR_MESSAGES.PAYMENT.DUPLICATE_PAYMENT);
+        // Fetch the existing purchase details
+        const { data: existingPurchase } = await supabaseAdmin
+          .from(DATABASE.TABLES.CREDIT_PURCHASES)
+          .select('id, credits_purchased, user_id')
+          .eq('razorpay_payment_id', razorpay_payment_id)
+          .eq('user_id', user.id)
+          .single();
+
+        if (!existingPurchase) {
+          // Payment exists but not for this user - security issue
+          throw new PaymentError('Payment verification failed');
+        }
+
+        // Fetch user's current balance
+        const { data: profile } = await supabaseAdmin
+          .from(DATABASE.TABLES.PROFILES)
+          .select('credits')
+          .eq('id', user.id)
+          .single();
+
+        // Payment was already processed successfully - return success
+        console.log('[PAYMENT] Returning existing purchase details', {
+          purchase_id: existingPurchase.id,
+          credits: existingPurchase.credits_purchased,
+        });
+
+        return successResponse(
+          {
+            success: true,
+            message: SUCCESS_MESSAGES.PAYMENT.VERIFIED,
+            data: {
+              credits_added: existingPurchase.credits_purchased,
+              new_balance: profile?.credits || 0,
+              purchase_id: existingPurchase.id,
+              agent_access: agentId ? 'granted' : 'n/a',
+              note: 'Payment was already processed successfully',
+            },
+          },
+          HTTP_STATUS.OK
+        );
       }
 
       console.error('[PAYMENT] Processing failed', {

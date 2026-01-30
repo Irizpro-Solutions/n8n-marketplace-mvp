@@ -49,3 +49,6 @@ SECURITY_GUIDE.md
 supabase/SCHEMA_EXPORT_INSTRUCTIONS.md
 supabase/migrations/MIGRATION_INSTRUCTIONS.md
 supabase/migrations/QUICK_START.md
+ADMIN_PRIVILEGES.md
+CREDENTIAL_SYSTEM.md
+.claude/settings.local.json

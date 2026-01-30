@@ -4,7 +4,11 @@
       "Bash(npm run build:*)",
       "Bash(git add:*)",
       "Bash(npm run dev:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(node -e:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)"
     ]
   }
 }
