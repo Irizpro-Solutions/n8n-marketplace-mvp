@@ -8,7 +8,6 @@ import ModernBackground from '@/components/layouts/ModernBackground'
 import ModernHeader from '@/components/layouts/ModernHeader'
 import {
   getUserPreferredCurrency,
-  setUserPreferredCurrency,
   getPrice,
   formatCurrency,
   SUPPORTED_CURRENCIES,
@@ -94,6 +93,7 @@ export default function BrowseAgents() {
       const { data, error } = await supabase
         .from('user_agents')
         .select('agent_id, remaining_credits')
+        .eq('user_id', user.id)
 
       if (error) throw error
       setPurchasedAgents(data || [])
@@ -133,11 +133,8 @@ export default function BrowseAgents() {
     return purchased?.remaining_credits || 0
   }
 
-  const handleCurrencyChange = (newCurrency: string) => {
-    setSelectedCurrency(newCurrency)
-    setUserPreferredCurrency(newCurrency)
-    console.log('💱 Currency changed to:', newCurrency)
-  }
+  // Currency is now auto-detected only - no manual changes allowed
+  // This follows industry best practices (Stripe, Netflix, Adobe)
 
   const handlePurchase = (agent: Agent) => {
     // Calculate price based on selected currency and agent's pricing_config
@@ -200,26 +197,19 @@ export default function BrowseAgents() {
             </p>
           </div>
 
-          {/* Currency Selector */}
+          {/* Currency Display (Auto-Detected) */}
           <div className="mb-6">
-            <div className="flex flex-wrap gap-3 justify-center items-center">
-              <span className="text-sm text-gray-400 font-medium">Currency:</span>
-              {Object.keys(SUPPORTED_CURRENCIES).map(currencyCode => {
-                const currencyInfo = SUPPORTED_CURRENCIES[currencyCode]
-                return (
-                  <button
-                    key={currencyCode}
-                    onClick={() => handleCurrencyChange(currencyCode)}
-                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                      selectedCurrency === currencyCode
-                        ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-lg shadow-purple-500/50'
-                        : 'bg-white/5 backdrop-blur-sm border border-white/10 text-gray-300 hover:bg-white/10 hover:text-white hover:border-white/20'
-                    }`}
-                  >
-                    {currencyInfo.symbol} {currencyCode}
-                  </button>
-                )
-              })}
+            <div className="flex items-center justify-center gap-2 text-sm">
+              <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-gray-400">
+                Prices shown in{' '}
+                <span className="font-semibold text-white">
+                  {SUPPORTED_CURRENCIES[selectedCurrency]?.symbol} {selectedCurrency}
+                </span>
+                {' '}(based on your location)
+              </span>
             </div>
           </div>
 
