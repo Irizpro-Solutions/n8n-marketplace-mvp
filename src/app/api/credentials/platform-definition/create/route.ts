@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { handleApiError, AuthenticationError, ValidationError } from '@/lib/error-handler';
+import { handleError, AuthenticationError, ValidationError } from '@/lib/error-handler';
 import { HTTP_STATUS } from '@/lib/constants';
 
 const ADMIN_EMAIL = 'team@irizpro.com';
@@ -104,6 +104,6 @@ export async function POST(req: NextRequest) {
     }, { status: HTTP_STATUS.OK });
 
   } catch (error) {
-    return handleApiError(error);
+    return handleError(error);
   }
 }

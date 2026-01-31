@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase/server';
 import { storePlatformCredentials } from '@/lib/credential-manager';
-import { handleApiError, AuthenticationError, ValidationError } from '@/lib/error-handler';
+import { handleError, AuthenticationError, ValidationError } from '@/lib/error-handler';
 import { HTTP_STATUS } from '@/lib/constants';
 
 /**
@@ -47,6 +47,6 @@ export async function PUT(req: NextRequest) {
     }, { status: HTTP_STATUS.OK });
 
   } catch (error) {
-    return handleApiError(error);
+    return handleError(error);
   }
 }
