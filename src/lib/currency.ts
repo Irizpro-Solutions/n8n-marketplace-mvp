@@ -198,27 +198,19 @@ export async function fetchExchangeRates(): Promise<Record<string, number>> {
   }
 }
 
-// Get user's preferred currency (stored in localStorage or detected)
+// Get user's preferred currency (always auto-detected, no manual override)
+// This follows SaaS best practices (Stripe, Netflix, Adobe) for location-based pricing
 export function getUserPreferredCurrency(): string {
-  try {
-    const stored = localStorage.getItem('preferred_currency')
-    if (stored && SUPPORTED_CURRENCIES[stored]) {
-      return stored
-    }
-  } catch (error) {
-    console.log('localStorage not available')
-  }
-  
+  // Always detect fresh - no localStorage override
+  // This prevents users from gaming the system by manually selecting cheaper currencies
   return detectUserCurrency()
 }
 
 // Set user's preferred currency
+// DEPRECATED: No longer used - currency is always auto-detected for security
+// Kept for backward compatibility but does nothing
 export function setUserPreferredCurrency(currency: string): void {
-  try {
-    if (SUPPORTED_CURRENCIES[currency]) {
-      localStorage.setItem('preferred_currency', currency)
-    }
-  } catch (error) {
-    console.log('Failed to save currency preference')
-  }
+  // No-op: We don't allow manual currency selection anymore
+  // This prevents revenue loss from users selecting cheaper currencies
+  console.log('⚠️ Manual currency selection disabled - using auto-detection')
 }
