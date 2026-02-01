@@ -44,40 +44,81 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyConfig> = {
     name: 'Euro',
     razorpaySupported: true,
     exchangeRate: 1.05 // 1 EUR = 1.05 USD (approximate)
+  },
+  GBP: {
+    code: 'GBP',
+    symbol: '£',
+    name: 'British Pound',
+    razorpaySupported: true,
+    exchangeRate: 1.27 // 1 GBP = 1.27 USD (approximate)
   }
 }
 
-// Country to currency mapping
-export const COUNTRY_CURRENCY_MAP: Record<string, string> = {
-  'IN': 'INR', // India
-  'US': 'USD', // United States
-  'AE': 'AED', // United Arab Emirates
-  'DE': 'EUR', // Germany
-  'FR': 'EUR', // France
-  'IT': 'EUR', // Italy
-  'ES': 'EUR', // Spain
-  'GB': 'USD', // UK (fallback to USD as GBP might not be supported)
-  'CA': 'USD', // Canada (fallback)
-  'AU': 'USD', // Australia (fallback)
-  'SG': 'USD', // Singapore (fallback)
-}
 
-// ENHANCED: Get price with custom hardcoded pricing support
+/**
+ * Get price with custom pricing support OR real-time conversion
+ *
+ * Priority Logic:
+ * 1. Custom hardcoded price (if admin set it) → Use custom price
+ * 2. INR request → Use base price directly
+ * 3. Other currencies → Use REAL-TIME exchange rate conversion from INR
+ *
+ * @param pricingConfig - Agent's pricing configuration
+ * @param currency - Target currency code
+ * @returns Price in target currency (sync - uses cached rates)
+ */
 export function getPrice(pricingConfig: PricingConfig, currency: string): number {
-  // Priority 1: Check for hardcoded custom price
+  // Priority 1: Check for admin-defined custom price
   if (pricingConfig.customPrices && pricingConfig.customPrices[currency]) {
-    console.log(`Using hardcoded price for ${currency}: ${pricingConfig.customPrices[currency]}`)
+    console.log(`[Pricing] Using custom admin price for ${currency}: ${pricingConfig.customPrices[currency]}`)
     return pricingConfig.customPrices[currency]
   }
-  
-  // Priority 2: Auto-convert from base price (INR)
+
+  // Priority 2: Return base price for INR (no conversion needed)
   if (currency === 'INR') {
+    console.log(`[Pricing] Using base INR price: ₹${pricingConfig.basePrice}`)
     return pricingConfig.basePrice
   }
-  
-  // Convert from INR to target currency
+
+  // Priority 3: Auto-convert from INR using HARDCODED rates (for sync usage)
+  // Note: For real-time rates, use getPriceAsync() instead
   const convertedPrice = convertCurrency(pricingConfig.basePrice, 'INR', currency)
-  console.log(`Auto-converted price from ₹${pricingConfig.basePrice} INR to ${currency}: ${convertedPrice}`)
+  console.log(`[Pricing] Auto-converted from ₹${pricingConfig.basePrice} INR to ${currency}: ${convertedPrice} (using hardcoded rates)`)
+  return convertedPrice
+}
+
+/**
+ * ASYNC version: Get price with REAL-TIME exchange rates
+ *
+ * Use this for accurate pricing when admin hasn't set custom prices.
+ * This fetches current exchange rates from API (cached for 24h).
+ *
+ * @param pricingConfig - Agent's pricing configuration
+ * @param currency - Target currency code
+ * @returns Promise<Price in target currency>
+ */
+export async function getPriceAsync(
+  pricingConfig: PricingConfig,
+  currency: string
+): Promise<number> {
+  // Import here to avoid circular dependency
+  const { convertFromINR } = await import('@/lib/exchange-rates')
+
+  // Priority 1: Check for admin-defined custom price
+  if (pricingConfig.customPrices && pricingConfig.customPrices[currency]) {
+    console.log(`[Pricing] Using custom admin price for ${currency}: ${pricingConfig.customPrices[currency]}`)
+    return pricingConfig.customPrices[currency]
+  }
+
+  // Priority 2: Return base price for INR
+  if (currency === 'INR') {
+    console.log(`[Pricing] Using base INR price: ₹${pricingConfig.basePrice}`)
+    return pricingConfig.basePrice
+  }
+
+  // Priority 3: Auto-convert using REAL-TIME exchange rates
+  const convertedPrice = await convertFromINR(pricingConfig.basePrice, currency as any)
+  console.log(`[Pricing] Auto-converted from ₹${pricingConfig.basePrice} INR to ${currency}: ${convertedPrice} (REAL-TIME rate)`)
   return convertedPrice
 }
 
@@ -102,29 +143,6 @@ export function getPriceWithType(pricingConfig: PricingConfig, currency: string)
   }
 }
 
-export function detectUserCurrency(): string {
-  // Try to detect user's country/currency
-  try {
-    // Method 1: Browser timezone detection
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    if (timezone.includes('Kolkata') || timezone.includes('Delhi') || timezone.includes('Mumbai') || timezone.includes('Calcutta')) return 'INR'
-    if (timezone.includes('Dubai') || timezone.includes('Abu_Dhabi') || timezone.includes('Riyadh')) return 'AED'
-    if (timezone.includes('Europe/') || timezone.includes('Paris') || timezone.includes('Berlin') || timezone.includes('Rome') || timezone.includes('Madrid')) return 'EUR'
-    if (timezone.includes('America/') || timezone.includes('New_York') || timezone.includes('Los_Angeles') || timezone.includes('Chicago')) return 'USD'
-
-    // Method 2: Browser locale detection
-    const locale = navigator.language || navigator.languages?.[0] || 'en-US'
-    if (locale.includes('en-IN') || locale.includes('hi') || locale.includes('mr') || locale.includes('ta')) return 'INR'
-    if (locale.includes('ar-AE') || locale.includes('ar-SA')) return 'AED'
-    if (locale.includes('de') || locale.includes('fr') || locale.includes('it') || locale.includes('es') || locale.includes('en-GB')) return 'EUR'
-
-  } catch (error) {
-    console.log('Currency detection failed, using USD as fallback')
-  }
-
-  // Default fallback to USD for rest of world
-  return 'USD'
-}
 
 export function convertCurrency(
   amount: number, 
@@ -198,19 +216,3 @@ export async function fetchExchangeRates(): Promise<Record<string, number>> {
   }
 }
 
-// Get user's preferred currency (always auto-detected, no manual override)
-// This follows SaaS best practices (Stripe, Netflix, Adobe) for location-based pricing
-export function getUserPreferredCurrency(): string {
-  // Always detect fresh - no localStorage override
-  // This prevents users from gaming the system by manually selecting cheaper currencies
-  return detectUserCurrency()
-}
-
-// Set user's preferred currency
-// DEPRECATED: No longer used - currency is always auto-detected for security
-// Kept for backward compatibility but does nothing
-export function setUserPreferredCurrency(currency: string): void {
-  // No-op: We don't allow manual currency selection anymore
-  // This prevents revenue loss from users selecting cheaper currencies
-  console.log('⚠️ Manual currency selection disabled - using auto-detection')
-}

@@ -29,7 +29,6 @@ import {
   AUDIT_LOG,
   DATABASE,
 } from '@/lib/constants';
-import { getSafeCurrency, validateCurrency } from '@/lib/currency-server';
 
 export const POST = withRateLimit(
   paymentRateLimiter,
@@ -48,32 +47,10 @@ export const POST = withRateLimit(
       createOrderSchema.parse(data)
     );
 
-    const { packageId, amount, credits, currency: requestedCurrency = 'USD' } = validatedData;
+    const { packageId, amount, credits, currency = 'INR' } = validatedData;
 
-    // 2.5. Server-side currency validation (SECURITY: Prevent currency manipulation)
-    const currencyValidation = validateCurrency(requestedCurrency, req);
-    const safeCurrency = getSafeCurrency(requestedCurrency, req);
-
-    // Log currency validation for security monitoring
-    if (!currencyValidation.isValid) {
-      console.warn('[SECURITY] Currency manipulation attempt detected:', {
-        requested: requestedCurrency,
-        detected: currencyValidation.detectedCurrency,
-        overridden: safeCurrency,
-        reason: currencyValidation.reason,
-        ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip'),
-        userAgent: req.headers.get('user-agent'),
-        timestamp: new Date().toISOString()
-      });
-    } else {
-      console.log('[Currency] Validation passed:', {
-        currency: safeCurrency,
-        source: 'server-detected'
-      });
-    }
-
-    // Use safe (server-detected) currency for payment processing
-    const currency = safeCurrency;
+    // Currency will be determined by the new pricing system
+    console.log('[Payment] Creating order with currency:', currency);
 
     // 3. Authenticate user
     const supabase = await supabaseServer();
@@ -161,7 +138,7 @@ export const POST = withRateLimit(
       credits,
     });
 
-    // 6. Record audit log (including currency validation for security)
+    // 6. Record audit log
     await recordAuditLog({
       userId,
       action: AUDIT_LOG.ACTION.CREATE,
@@ -173,11 +150,6 @@ export const POST = withRateLimit(
         amount,
         credits,
         currency: currency,
-        // Security: Track currency validation
-        requested_currency: requestedCurrency,
-        detected_currency: currencyValidation.detectedCurrency,
-        currency_overridden: !currencyValidation.isValid,
-        validation_reason: currencyValidation.reason,
       },
       ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined,
       userAgent: req.headers.get('user-agent') || undefined,

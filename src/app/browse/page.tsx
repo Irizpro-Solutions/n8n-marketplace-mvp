@@ -6,9 +6,9 @@ import { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
 import ModernBackground from '@/components/layouts/ModernBackground'
 import ModernHeader from '@/components/layouts/ModernHeader'
+import { useCurrency } from '@/hooks/useCurrency'
 import {
-  getUserPreferredCurrency,
-  getPrice,
+  getPriceAsync,
   formatCurrency,
   SUPPORTED_CURRENCIES,
   type PricingConfig
@@ -39,8 +39,11 @@ export default function BrowseAgents() {
   const [purchasedAgents, setPurchasedAgents] = useState<PurchasedAgent[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('USD')
+  const [agentPrices, setAgentPrices] = useState<Record<string, number>>({})
   const router = useRouter()
+
+  // Currency detection hook
+  const { currency, loading: currencyLoading } = useCurrency()
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,11 +51,6 @@ export default function BrowseAgents() {
   )
 
   useEffect(() => {
-    // Detect and set user's currency on mount
-    const detectedCurrency = getUserPreferredCurrency()
-    setSelectedCurrency(detectedCurrency)
-    console.log('💱 Detected user currency:', detectedCurrency)
-
     checkUser()
     loadAgents()
   }, [])
@@ -63,6 +61,13 @@ export default function BrowseAgents() {
       loadUserCredits()
     }
   }, [user])
+
+  // Load pricing when currency is detected or agents change
+  useEffect(() => {
+    if (!currencyLoading && agents.length > 0) {
+      loadPricing()
+    }
+  }, [currency, currencyLoading, agents])
 
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -119,6 +124,36 @@ export default function BrowseAgents() {
     }
   }
 
+  const loadPricing = async () => {
+    if (currencyLoading || agents.length === 0) return
+
+    console.log('[Browse] Loading pricing for currency:', currency)
+
+    try {
+      const prices: Record<string, number> = {}
+
+      // Calculate price for each agent using real-time exchange rates
+      for (const agent of agents) {
+        // Use pricing_config if available, otherwise fallback to credit_cost
+        const pricingConfig = agent.pricing_config || { basePrice: agent.credit_cost }
+
+        // Get price with real-time exchange rate conversion
+        prices[agent.id] = await getPriceAsync(pricingConfig, currency)
+      }
+
+      setAgentPrices(prices)
+      console.log('[Browse] Pricing loaded:', { currency, agentCount: Object.keys(prices).length })
+    } catch (error) {
+      console.error('[Browse] Error loading pricing:', error)
+      // Fallback: use credit_cost as-is
+      const fallbackPrices: Record<string, number> = {}
+      agents.forEach(agent => {
+        fallbackPrices[agent.id] = agent.credit_cost
+      })
+      setAgentPrices(fallbackPrices)
+    }
+  }
+
   const categories = ['all', ...new Set(agents.map(agent => agent.category).filter(Boolean))]
   const filteredAgents = selectedCategory === 'all' 
     ? agents 
@@ -133,16 +168,9 @@ export default function BrowseAgents() {
     return purchased?.remaining_credits || 0
   }
 
-  // Currency is now auto-detected only - no manual changes allowed
-  // This follows industry best practices (Stripe, Netflix, Adobe)
-
   const handlePurchase = (agent: Agent) => {
-    // Calculate price based on selected currency and agent's pricing_config
-    const pricingConfig = agent.pricing_config || {
-      basePrice: agent.credit_cost,
-      customPrices: {}
-    }
-    const price = getPrice(pricingConfig, selectedCurrency)
+    // Get the real-time calculated price for this agent in detected currency
+    const price = agentPrices[agent.id] || agent.credit_cost
 
     if (!user) {
       // Store agent data for after login
@@ -150,7 +178,7 @@ export default function BrowseAgents() {
         agent_id: agent.id,
         agent_name: agent.name,
         credit_cost: price.toString(),
-        currency: selectedCurrency,
+        currency: currency,
         new_purchase: 'true'
       }))
       router.push('/auth/login?redirect=purchase')
@@ -161,19 +189,21 @@ export default function BrowseAgents() {
       agent_id: agent.id,
       agent_name: agent.name,
       credit_cost: price.toString(),
-      currency: selectedCurrency,
+      currency: currency,
       new_purchase: 'true'
     })
     router.push(`/purchase?${params.toString()}`)
   }
 
-  if (loading) {
+  if (loading || currencyLoading) {
     return (
       <ModernBackground>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <div className="text-xl text-white font-medium">Loading agents...</div>
+            <div className="text-xl text-white font-medium">
+              {loading ? 'Loading agents...' : 'Detecting your currency...'}
+            </div>
           </div>
         </div>
       </ModernBackground>
@@ -195,21 +225,13 @@ export default function BrowseAgents() {
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
               Browse our marketplace of powerful automation workflows
             </p>
-          </div>
-
-          {/* Currency Display (Auto-Detected) */}
-          <div className="mb-6">
-            <div className="flex items-center justify-center gap-2 text-sm">
-              <svg className="w-4 h-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-gray-400">
-                Prices shown in{' '}
-                <span className="font-semibold text-white">
-                  {SUPPORTED_CURRENCIES[selectedCurrency]?.symbol} {selectedCurrency}
-                </span>
-                {' '}(based on your location)
+            {/* Currency Indicator */}
+            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-full">
+              <span className="text-sm text-gray-400">Prices shown in</span>
+              <span className="text-sm font-semibold text-cyan-400">
+                {SUPPORTED_CURRENCIES[currency]?.name || currency}
               </span>
+              <span className="text-sm text-gray-400">({SUPPORTED_CURRENCIES[currency]?.symbol || currency})</span>
             </div>
           </div>
 
@@ -259,11 +281,12 @@ export default function BrowseAgents() {
                 <ModernAgentCard
                   key={agent.id}
                   agent={agent}
+                  price={agentPrices[agent.id] || agent.credit_cost}
+                  currency={currency}
                   isPurchased={user ? isPurchased(agent.id) : false}
                   remainingCredits={user ? getRemainingCredits(agent.id) : 0}
                   onPurchase={() => handlePurchase(agent)}
                   isLoggedIn={!!user}
-                  selectedCurrency={selectedCurrency}
                 />
               ))}
             </div>
@@ -276,23 +299,16 @@ export default function BrowseAgents() {
 
 interface ModernAgentCardProps {
   agent: Agent
+  price: number
+  currency: string
   isPurchased: boolean
   remainingCredits: number
   onPurchase: () => void
   isLoggedIn: boolean
-  selectedCurrency: string
 }
 
-function ModernAgentCard({ agent, isPurchased, remainingCredits, onPurchase, isLoggedIn, selectedCurrency }: ModernAgentCardProps) {
+function ModernAgentCard({ agent, price, currency, isPurchased, remainingCredits, onPurchase, isLoggedIn }: ModernAgentCardProps) {
   const isNew = new Date(agent.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-
-  // Calculate price based on selected currency and agent's pricing_config
-  const pricingConfig = agent.pricing_config || {
-    basePrice: agent.credit_cost,
-    customPrices: {}
-  }
-  const price = getPrice(pricingConfig, selectedCurrency)
-  const formattedPrice = formatCurrency(price, selectedCurrency)
 
   return (
     <div className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300 hover:scale-105 hover:border-purple-500/50 hover:shadow-xl hover:shadow-purple-500/20">
@@ -328,11 +344,18 @@ function ModernAgentCard({ agent, isPurchased, remainingCredits, onPurchase, isL
 
       {/* Pricing */}
       <div className="mb-4 p-4 bg-black/30 border border-white/10 rounded-lg">
-        <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
-            {formattedPrice}
-          </span>
-          <span className="text-sm text-gray-400">/ execution</span>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+              {formatCurrency(price, currency)}
+            </span>
+            <span className="text-sm text-gray-400">/ execution</span>
+          </div>
+          {currency !== 'INR' && (
+            <div className="text-xs text-gray-500">
+              ≈ ₹{agent.credit_cost} INR base price
+            </div>
+          )}
         </div>
       </div>
 
