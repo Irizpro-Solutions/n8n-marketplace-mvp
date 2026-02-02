@@ -18,7 +18,21 @@ export async function GET(req: NextRequest) {
     // Apply rate limiting
     const rateLimitResult = await rateLimiter(req)
     if (!rateLimitResult.success) {
-      return rateLimitResult.response
+      return NextResponse.json(
+        {
+          error: 'Too many requests. Please try again later.',
+          retryAfter: rateLimitResult.retryAfter,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': rateLimitResult.retryAfter?.toString() || '60',
+            'X-RateLimit-Limit': rateLimitResult.limit.toString(),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': rateLimitResult.reset.toISOString(),
+          },
+        }
+      )
     }
 
     // Query agents using service_role (bypasses RLS)
