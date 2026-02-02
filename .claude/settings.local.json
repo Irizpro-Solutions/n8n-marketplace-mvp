@@ -8,7 +8,11 @@
       "Bash(node -e:*)",
       "Bash(find:*)",
       "Bash(grep:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(gh auth:*)",
+      "Bash(git rm:*)",
+      "Bash(git restore:*)",
+      "Bash(git remote:*)"
     ]
   }
 }

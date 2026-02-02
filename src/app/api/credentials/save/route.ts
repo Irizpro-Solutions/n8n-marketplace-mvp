@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { storePlatformCredentials, getPlatformDefinition, disconnectPlatformCredentials } from '@/lib/credential-manager';
 import { HTTP_STATUS, ERROR_MESSAGES } from '@/lib/constants';
 
@@ -71,14 +72,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Verify agent exists
-    const { data: agent, error: agentError } = await supabase
+    // 3. Verify agent exists (use admin client to bypass RLS)
+    const { data: agent, error: agentError } = await supabaseAdmin
       .from('agents')
       .select('id, name, required_platforms')
       .eq('id', agentId)
+      .eq('is_active', true)
       .single();
 
     if (agentError || !agent) {
+      console.error('[API] Agent verification failed:', { agentId, error: agentError?.message });
       return NextResponse.json(
         { error: ERROR_MESSAGES.WORKFLOW.AGENT_NOT_FOUND },
         { status: HTTP_STATUS.NOT_FOUND }
