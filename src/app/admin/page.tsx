@@ -88,9 +88,6 @@ export default function AdminPanel() {
     checkAdmin()
     loadAgents()
     loadAvailablePlatforms()
-
-    const cleanup = setupRealtimeSubscription()
-    return cleanup
   }, [])
 
   useEffect(() => {
@@ -99,27 +96,8 @@ export default function AdminPanel() {
     }
   }, [forceUpdate])
 
-  const setupRealtimeSubscription = () => {
-    const channel = supabase
-      .channel('admin-agents-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'agents'
-        },
-        (payload) => {
-          console.log('Real-time agent update:', payload)
-          loadAgents()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }
+  // Realtime subscriptions removed (not compatible with RLS-protected tables)
+  // Admin panel will reload agents after each operation instead
 
   const checkAdmin = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -132,19 +110,24 @@ export default function AdminPanel() {
 
   const loadAgents = async () => {
     try {
-      const { data, error } = await supabase
-        .from('agents')
-        .select('*')
-        .order('created_at', { ascending: false })
+      // Fetch agents via admin API route (requires authentication)
+      const response = await fetch('/api/admin/agents')
+      if (!response.ok) {
+        throw new Error(`Failed to fetch agents: ${response.statusText}`)
+      }
 
-      if (error) throw error
-      setAgents(data || [])
+      const result = await response.json()
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Failed to fetch agents')
+      }
 
+      setAgents(result.data)
       setForceUpdate(prev => prev + 1)
 
-      console.log('Agents loaded:', data?.length || 0)
+      console.log('Agents loaded:', result.data.length)
     } catch (error) {
       console.error('Error loading agents:', error)
+      setAgents([])
     } finally {
       setLoading(false)
     }
@@ -354,9 +337,11 @@ export default function AdminPanel() {
       const inputSchema = requiresInputs ? generateInputSchema() : []
       const credFields = credentialFields.filter(f => f.trim()) // Filter out empty fields (legacy)
 
-      const { data, error } = await supabase
-        .from('agents')
-        .insert({
+      // Create agent via admin API route
+      const response = await fetch('/api/admin/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name: formData.name.trim(),
           description: formData.description.trim(),
           category: formData.category.trim(),
@@ -368,11 +353,15 @@ export default function AdminPanel() {
           credit_cost: agentPricing.basePrice,
           pricing_config: agentPricing
         })
-        .select()
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || 'Failed to create agent')
+      }
 
-      console.log('Agent created successfully:', data)
+      const result = await response.json()
+      console.log('Agent created successfully:', result.data)
       alert('Agent deployed to marketplace successfully!')
 
       resetForm()
@@ -449,9 +438,12 @@ export default function AdminPanel() {
       const inputSchema = requiresInputs ? generateInputSchema() : []
       const credFields = credentialFields.filter(f => f.trim()) // Filter out empty fields (legacy)
 
-      const { error } = await supabase
-        .from('agents')
-        .update({
+      // Update agent via admin API route
+      const response = await fetch('/api/admin/agents', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingAgent.id,
           name: formData.name.trim(),
           description: formData.description.trim(),
           category: formData.category.trim(),
@@ -463,9 +455,12 @@ export default function AdminPanel() {
           credit_cost: agentPricing.basePrice,
           pricing_config: agentPricing
         })
-        .eq('id', editingAgent.id)
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || 'Failed to update agent')
+      }
 
       alert('Agent updated successfully!')
       setShowEditForm(false)
@@ -484,12 +479,20 @@ export default function AdminPanel() {
     try {
       setActionLoading(agentId)
 
-      const { error } = await supabase
-        .from('agents')
-        .update({ is_active: !currentStatus })
-        .eq('id', agentId)
+      // Toggle agent status via admin API route
+      const response = await fetch('/api/admin/agents', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: agentId,
+          is_active: !currentStatus
+        })
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || 'Failed to toggle agent status')
+      }
 
       await loadAgents()
 
@@ -515,17 +518,17 @@ export default function AdminPanel() {
     try {
       setActionLoading(agentId)
 
-      console.log('Deleting agent and all related data:', agentId)
+      console.log('Deleting agent via admin API:', agentId)
 
-      await supabase.from('user_agents').delete().eq('agent_id', agentId)
-      await supabase.from('agent_executions').delete().eq('agent_id', agentId)
+      // Delete agent via admin API route
+      const response = await fetch(`/api/admin/agents?id=${agentId}`, {
+        method: 'DELETE'
+      })
 
-      const { error } = await supabase
-        .from('agents')
-        .delete()
-        .eq('id', agentId)
-
-      if (error) throw error
+      if (!response.ok) {
+        const result = await response.json()
+        throw new Error(result.error || 'Failed to delete agent')
+      }
 
       console.log('Agent deleted successfully')
       alert(`"${agentName}" has been permanently deleted from the marketplace.`)

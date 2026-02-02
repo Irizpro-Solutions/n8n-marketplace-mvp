@@ -43,12 +43,30 @@ next-env.d.ts
 #n8n_Json
 /n8n_Json
 
+# Documentation and guide files (exclude from repo)
 CLAUDE.md
-IMPLEMENTATION_SUMMARY.md
+*_GUIDE.md
+*_SUMMARY.md
+*_IMPLEMENTATION*.md
+*_INSTRUCTIONS.md
+*_COMPLETE.md
+FIX_*.md
 SECURITY_GUIDE.md
+ADMIN_PRIVILEGES.md
+CREDENTIAL_SYSTEM*.md
+PAYMENT_*.md
+WEBHOOK_*.md
+OAUTH_*.md
+SIMPLE_*.md
+CURRENCY_*.md
+FRONTEND_*.md
 supabase/SCHEMA_EXPORT_INSTRUCTIONS.md
 supabase/migrations/MIGRATION_INSTRUCTIONS.md
 supabase/migrations/QUICK_START.md
-ADMIN_PRIVILEGES.md
-CREDENTIAL_SYSTEM.md
+
+# Claude Code local settings
 .claude/settings.local.json
+.claude/memory/
+
+# Keep README.md (important for repository)
+!README.md

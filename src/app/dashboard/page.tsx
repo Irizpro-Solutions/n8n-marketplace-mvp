@@ -97,17 +97,17 @@ function DashboardContent() {
       const isAdmin = userEmail === 'team@irizpro.com'
 
       if (isAdmin) {
-        // Admin: Load ALL active agents
-        const { data, error } = await supabase
-          .from('agents')
-          .select('*')
-          .eq('is_active', true)
-          .order('created_at', { ascending: false })
+        // Admin: Load ALL active agents via API route
+        const response = await fetch('/api/agents/list')
+        if (!response.ok) throw new Error('Failed to load agents')
 
-        if (error) throw error
+        const result = await response.json()
+        if (!result.success || !result.data) {
+          throw new Error(result.error || 'Failed to load agents')
+        }
 
         // Transform to match PurchasedAgent structure
-        const transformedData = data?.map((agent: any) => ({
+        const transformedData = result.data.map((agent: any) => ({
           id: agent.id,
           agent_id: agent.id,
           user_id: userId,

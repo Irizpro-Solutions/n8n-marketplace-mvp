@@ -76,16 +76,19 @@ export default function BrowseAgents() {
 
   const loadAgents = async () => {
     try {
-      const { data, error } = await supabase
-        .from('agents')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
+      // Fetch agents via secure API route (RLS-protected)
+      const response = await fetch('/api/agents/list')
+      if (!response.ok) throw new Error('Failed to fetch agents')
 
-      if (error) throw error
-      setAgents(data || [])
+      const result = await response.json()
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Failed to fetch agents')
+      }
+
+      setAgents(result.data)
     } catch (error) {
       console.error('Error loading agents:', error)
+      setAgents([]) // Set empty array on error
     } finally {
       setLoading(false)
     }
