@@ -441,7 +441,6 @@ function DashboardContent() {
           onManageCredentials={handleManageCredentials}
           showCredentialSidebar={showCredentialSidebar}
           onCloseCredentialSidebar={() => setShowCredentialSidebar(false)}
-          credentialStatus={credentialStatus}
         />
       )}
 
