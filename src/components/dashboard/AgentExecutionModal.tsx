@@ -18,7 +18,6 @@ interface AgentExecutionModalProps {
   onManageCredentials?: () => void
   showCredentialSidebar?: boolean
   onCloseCredentialSidebar?: () => void
-  credentialStatus?: any
 }
 
 export default function AgentExecutionModal({
@@ -33,7 +32,6 @@ export default function AgentExecutionModal({
   onManageCredentials,
   showCredentialSidebar = false,
   onCloseCredentialSidebar,
-  credentialStatus,
 }: AgentExecutionModalProps) {
   const [inputs, setInputs] = useState<Record<string, string>>({})
 
@@ -242,7 +240,6 @@ export default function AgentExecutionModal({
           agentId={agent.id}
           agentName={agent.name}
           requiredPlatforms={agent.required_platforms || []}
-          credentialStatus={credentialStatus}
         />
       )}
     </>
