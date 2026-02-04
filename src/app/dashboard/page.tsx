@@ -8,6 +8,7 @@ import ModernBackground from '@/components/layouts/ModernBackground'
 import ModernHeader from '@/components/layouts/ModernHeader'
 import PlatformCredentialsForm from '@/components/credentials/PlatformCredentialsForm'
 import CredentialManagementSidebar from '@/components/credentials/CredentialManagementSidebar'
+import ResponseRenderer from '@/components/workflows/ResponseRenderer'
 
 interface PurchasedAgent {
   id: string
@@ -480,12 +481,10 @@ function DashboardContent() {
                       )}
 
                       {executionResult && (
-                        <div className="p-4 bg-green-500/20 border border-green-500/50 rounded-lg">
-                          <p className="text-green-200 text-sm font-semibold mb-2">Execution Successful!</p>
-                          <pre className="text-xs text-green-100 overflow-auto max-h-40">
-                            {JSON.stringify(executionResult, null, 2)}
-                          </pre>
-                        </div>
+                        <ResponseRenderer
+                          response={executionResult}
+                          title="Execution Successful!"
+                        />
                       )}
 
                       <div className="flex gap-3">

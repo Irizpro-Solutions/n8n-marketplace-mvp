@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import ResponseRenderer from "@/components/workflows/ResponseRenderer";
 
 type Field = {
   key: string;
@@ -36,7 +37,7 @@ export default function RunWorkflowForm({ workflow }: any) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workflowId: workflow.id,
+          agentId: workflow.id,
           inputs: formData,
         }),
       });
@@ -127,12 +128,10 @@ export default function RunWorkflowForm({ workflow }: any) {
 
       {/* Result */}
       {result && (
-        <div className="rounded-xl border bg-muted/40 p-4 space-y-2">
-          <div className="text-sm font-semibold">Execution Result</div>
-          <pre className="bg-black text-white p-3 rounded-lg text-xs overflow-auto max-h-[420px]">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        </div>
+        <ResponseRenderer
+          response={result.result || result}
+          title="Execution Result"
+        />
       )}
     </div>
   );
