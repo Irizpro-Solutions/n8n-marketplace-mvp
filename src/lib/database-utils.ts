@@ -101,11 +101,10 @@ export async function requireAdmin() {
 
 /**
  * Gets agent by ID with validation
+ * Uses admin client to bypass RLS (agents table requires service_role)
  */
 export async function getAgentById(agentId: string) {
-  const supabase = await supabaseServer();
-
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from(DATABASE.TABLES.AGENTS)
     .select('*')
     .eq('id', agentId)
