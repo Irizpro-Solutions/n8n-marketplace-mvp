@@ -13,7 +13,9 @@
       "Bash(git rm:*)",
       "Bash(git restore:*)",
       "Bash(git remote:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)"
     ]
   }
 }

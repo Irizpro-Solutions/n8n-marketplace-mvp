@@ -95,7 +95,38 @@ async function callN8nWebhook(
       throw new Error(`n8n webhook error ${res.status}: ${errorText}`);
     }
 
-    return await res.json();
+    // Get raw response text first for debugging
+    const rawResponse = await res.text();
+
+    console.log('[N8N] Raw response received', {
+      length: rawResponse.length,
+      preview: rawResponse.substring(0, 200),
+      contentType: res.headers.get('content-type'),
+    });
+
+    // Try to parse JSON with better error handling
+    try {
+      // Handle empty responses
+      if (!rawResponse || rawResponse.trim() === '') {
+        console.warn('[N8N] Empty response from webhook');
+        return { message: 'Workflow completed successfully' };
+      }
+
+      const jsonResponse = JSON.parse(rawResponse);
+      return jsonResponse;
+    } catch (parseError) {
+      console.error('[N8N] JSON parse error', {
+        error: parseError instanceof Error ? parseError.message : 'Unknown error',
+        rawResponse: rawResponse.substring(0, 500),
+      });
+
+      // If parsing fails, return the raw response wrapped in an object
+      // This allows HTML responses to still be displayed
+      return {
+        rawResponse: rawResponse,
+        _parseError: true,
+      };
+    }
   } finally {
     clearTimeout(timeout);
   }

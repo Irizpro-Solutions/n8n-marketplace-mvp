@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { Download } from "lucide-react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 interface ResponseRendererProps {
   response: any;
   title?: string;
   className?: string;
+  showDownload?: boolean;
+  cleanMode?: boolean; // New prop to hide all UI chrome
 }
 
 /**
@@ -20,8 +25,118 @@ export default function ResponseRenderer({
   response,
   title = "Execution Result",
   className = "",
+  showDownload = true,
+  cleanMode = false,
 }: ResponseRendererProps) {
   const [viewMode, setViewMode] = useState<"rendered" | "raw">("rendered");
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const downloadAsPDF = async () => {
+    if (!contentRef.current) return;
+
+    try {
+      // Show loading message
+      const loadingMsg = document.createElement('div');
+      loadingMsg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px 40px;border-radius:10px;z-index:9999;font-size:16px;';
+      loadingMsg.textContent = 'Generating PDF... Please wait';
+      document.body.appendChild(loadingMsg);
+
+      // Clone the element to avoid modifying the displayed content
+      const element = contentRef.current;
+      const clone = element.cloneNode(true) as HTMLElement;
+
+      // Create temporary container for the clone
+      const tempContainer = document.createElement('div');
+      tempContainer.style.cssText = 'position:absolute;left:-9999px;top:0;width:800px;';
+      document.body.appendChild(tempContainer);
+      tempContainer.appendChild(clone);
+
+      // Replace unsupported CSS colors in the clone
+      const allElements = clone.querySelectorAll('*');
+      allElements.forEach((el: any) => {
+        if (el.style) {
+          const style = el.style.cssText;
+          if (style.includes('lab(')) {
+            // Replace lab() colors with rgb equivalents or remove them
+            el.style.cssText = style.replace(/lab\([^)]+\)/g, 'rgb(147, 51, 234)'); // Use purple as fallback
+          }
+        }
+      });
+
+      // Capture the HTML as canvas
+      const canvas = await html2canvas(clone, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: 800,
+      });
+
+      // Clean up temp container
+      document.body.removeChild(tempContainer);
+
+      // Calculate PDF dimensions
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      // Create PDF
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      let heightLeft = imgHeight;
+      let position = 0;
+      let page = 1;
+
+      // Add first page
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Add additional pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+        page++;
+      }
+
+      // Save the PDF
+      pdf.save(`SEO-Report-${new Date().toISOString().split('T')[0]}.pdf`);
+
+      // Remove loading message
+      document.body.removeChild(loadingMsg);
+
+      // Show success message
+      const successMsg = document.createElement('div');
+      successMsg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(16,185,129,0.9);color:white;padding:15px 30px;border-radius:10px;z-index:9999;font-size:14px;';
+      successMsg.textContent = `✓ PDF downloaded successfully! (${page} page${page > 1 ? 's' : ''})`;
+      document.body.appendChild(successMsg);
+      setTimeout(() => document.body.removeChild(successMsg), 3000);
+
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      alert('Failed to generate PDF. Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  // Handle raw response from parse errors
+  const actualResponse = response?._parseError && response?.rawResponse
+    ? response.rawResponse
+    : response;
+
+  // Debug logging
+  console.log('[ResponseRenderer] Received response:', {
+    type: typeof actualResponse,
+    isArray: Array.isArray(actualResponse),
+    keys: typeof actualResponse === 'object' ? Object.keys(actualResponse) : null,
+    preview: JSON.stringify(actualResponse)?.substring(0, 200),
+  });
 
   // Extract HTML from various response formats
   const extractHtml = (data: any): string | null => {
@@ -68,9 +183,38 @@ export default function ResponseRenderer({
     );
   };
 
-  const htmlContent = extractHtml(response);
-  const simpleMessage = isSimpleMessage(response) ? response : null;
+  const htmlContent = extractHtml(actualResponse);
+  const simpleMessage = isSimpleMessage(actualResponse) ? actualResponse : null;
 
+  // Clean mode - just show HTML with download button
+  if (cleanMode && htmlContent) {
+    return (
+      <div className={`relative ${className}`}>
+        {showDownload && (
+          <div className="absolute top-4 right-4 z-10 flex gap-2">
+            <button
+              onClick={downloadAsPDF}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700 text-white rounded-lg shadow-lg transition-all font-medium"
+            >
+              <Download className="w-4 h-4" />
+              Download PDF
+            </button>
+          </div>
+        )}
+        <div
+          ref={contentRef}
+          className="overflow-auto max-h-[70vh] bg-white rounded-lg"
+          dangerouslySetInnerHTML={{ __html: htmlContent }}
+          style={{
+            wordWrap: "break-word",
+            overflowWrap: "break-word",
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Standard mode - with all UI chrome
   return (
     <div className={`rounded-xl border bg-muted/40 p-4 space-y-3 ${className}`}>
       {/* Header with view toggle */}
@@ -125,6 +269,7 @@ export default function ResponseRenderer({
               <span>HTML Output</span>
             </div>
             <div
+              ref={contentRef}
               className="p-4 overflow-auto max-h-[600px]"
               dangerouslySetInnerHTML={{ __html: htmlContent }}
               style={{
@@ -161,7 +306,9 @@ export default function ResponseRenderer({
               <span>JSON Response</span>
             </div>
             <pre className="text-white p-4 text-xs overflow-auto max-h-[600px] leading-relaxed">
-              {JSON.stringify(response, null, 2)}
+              {typeof actualResponse === 'string'
+                ? actualResponse
+                : JSON.stringify(actualResponse, null, 2)}
             </pre>
           </div>
         )}

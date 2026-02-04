@@ -6,9 +6,8 @@ import { User } from '@supabase/supabase-js'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ModernBackground from '@/components/layouts/ModernBackground'
 import ModernHeader from '@/components/layouts/ModernHeader'
-import PlatformCredentialsForm from '@/components/credentials/PlatformCredentialsForm'
+import AgentExecutionModal from '@/components/dashboard/AgentExecutionModal'
 import CredentialManagementSidebar from '@/components/credentials/CredentialManagementSidebar'
-import ResponseRenderer from '@/components/workflows/ResponseRenderer'
 
 interface PurchasedAgent {
   id: string
@@ -40,12 +39,10 @@ function DashboardContent() {
   const [userCredits, setUserCredits] = useState<number>(0)
   const [purchasedAgents, setPurchasedAgents] = useState<PurchasedAgent[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedAgent, setSelectedAgent] = useState<PurchasedAgent | null>(null)
-  const [showCredentialForm, setShowCredentialForm] = useState(false)
+  const [modalAgent, setModalAgent] = useState<PurchasedAgent | null>(null)
   const [showCredentialSidebar, setShowCredentialSidebar] = useState(false)
   const [credentialStatus, setCredentialStatus] = useState<CredentialStatus | null>(null)
   const [checkingCredentials, setCheckingCredentials] = useState(false)
-  const [executionData, setExecutionData] = useState<Record<string, string>>({})
   const [executing, setExecuting] = useState(false)
   const [executionResult, setExecutionResult] = useState<any>(null)
   const [executionError, setExecutionError] = useState<string | null>(null)
@@ -176,49 +173,44 @@ function DashboardContent() {
   }
 
   const handleAgentClick = async (purchasedAgent: PurchasedAgent) => {
-    setSelectedAgent(purchasedAgent)
-    setExecutionData({})
+    setModalAgent(purchasedAgent)
     setExecutionError(null)
     setExecutionResult(null)
-    setShowCredentialForm(false)
-    setShowCredentialSidebar(false)
+    setCredentialStatus(null)
 
     // Check if agent requires credentials
     const requiredPlatforms = purchasedAgent.agent.required_platforms || []
 
     if (requiredPlatforms.length === 0) {
-      // No credentials required, show execution form directly
+      // No credentials required, show execution modal directly
       return
     }
 
     // Dynamic credential detection: Check if user has all required credentials
-    const status = await checkCredentialStatus(purchasedAgent.agent_id)
+    // Don't await - let modal open immediately, check credentials in background
+    checkCredentialStatus(purchasedAgent.agent_id).then(status => {
+      if (status) {
+        setCredentialStatus(status)
 
-    if (status) {
-      setCredentialStatus(status)
-
-      if (!status.has_all_credentials) {
-        // Missing credentials - auto-open sidebar and show warning
-        setShowCredentialSidebar(true)
-
-        // Show inline warning in execution modal
-        setExecutionError(
-          `⚠️ Missing ${status.missing_platforms.length} credential(s): ${status.missing_platforms.join(', ')}. Please connect these credentials in the sidebar before running this agent.`
-        )
-      } else {
-        // All credentials connected - allow execution
-        console.log('✅ All credentials connected for', purchasedAgent.agent.name)
+        if (!status.has_all_credentials && status.missing_platforms.length > 0) {
+          // Missing credentials - show warning
+          setExecutionError(
+            `⚠️ Missing ${status.missing_platforms.length} credential(s): ${status.missing_platforms.join(', ')}. Please connect these credentials before running this agent.`
+          )
+        } else {
+          // All credentials connected - allow execution
+          console.log('✅ All credentials connected for', purchasedAgent.agent.name)
+        }
       }
-    }
+    }).catch(err => {
+      console.error('Credential check failed:', err)
+      // Don't block modal - just log the error
+    })
   }
 
-  const handleCredentialsSaved = () => {
-    // Credentials saved successfully, hide credential form and show execution form
-    setShowCredentialForm(false)
-    setCredentialStatus(null)
-  }
+  const handleExecuteAgent = async (inputs: Record<string, string>) => {
+    if (!modalAgent) return
 
-  const handleExecuteAgent = async (purchasedAgent: PurchasedAgent) => {
     setExecuting(true)
     setExecutionError(null)
     setExecutionResult(null)
@@ -228,10 +220,18 @@ function DashboardContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agentId: purchasedAgent.agent_id,
-          inputs: executionData
+          agentId: modalAgent.agent_id,
+          inputs
         })
       })
+
+      // Handle non-JSON responses (500 errors return HTML)
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text()
+        console.error('Non-JSON response:', text.substring(0, 500))
+        throw new Error('Server error: Received non-JSON response. Check console for details.')
+      }
 
       const result = await response.json()
 
@@ -249,10 +249,23 @@ function DashboardContent() {
         ])
       }
     } catch (error: any) {
+      console.error('Execution error:', error)
       setExecutionError(error.message || 'Failed to execute workflow')
     } finally {
       setExecuting(false)
     }
+  }
+
+  const handleManageCredentials = () => {
+    // Close modal when opening credential sidebar so it's not blocked
+    setModalAgent(null)
+    setShowCredentialSidebar(true)
+  }
+
+  const handleCloseModal = () => {
+    setModalAgent(null)
+    setExecutionError(null)
+    setExecutionResult(null)
   }
 
   if (loading) {
@@ -385,153 +398,28 @@ function DashboardContent() {
                   {/* Description */}
                   <p className="text-sm text-gray-400 mb-4">{purchasedAgent.agent.description}</p>
 
-                  {/* Credential Setup Form or Execution Form */}
-                  {selectedAgent?.id === purchasedAgent.id ? (
-                    showCredentialForm ? (
-                      /* Show Credential Form if missing credentials */
-                      <div className="mt-4">
-                        <PlatformCredentialsForm
-                          agentId={purchasedAgent.agent_id}
-                          agentName={purchasedAgent.agent.name}
-                          requiredPlatforms={credentialStatus?.missing_platforms || []}
-                          onComplete={handleCredentialsSaved}
-                          onCancel={() => {
-                            setSelectedAgent(null)
-                            setShowCredentialForm(false)
-                            setCredentialStatus(null)
-                          }}
-                        />
-                      </div>
-                    ) : checkingCredentials ? (
-                      /* Loading credentials check */
-                      <div className="mt-4 p-8 text-center">
-                        <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-gray-400">Checking credentials...</p>
-                      </div>
-                    ) : (
-                      /* Show Execution Form */
-                      <div className="space-y-4 mt-4">
-                        {purchasedAgent.agent.input_schema?.map((field: any) => (
-                        <div key={field.name}>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">
-                            {field.label} {field.required && <span className="text-red-400">*</span>}
-                          </label>
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-1 gap-3">
+                    <button
+                      onClick={() => handleAgentClick(purchasedAgent)}
+                      className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300"
+                    >
+                      🚀 Execute Agent
+                    </button>
 
-                          {/* Textarea */}
-                          {field.type === 'textarea' ? (
-                            <textarea
-                              value={executionData[field.name] || ''}
-                              onChange={(e) => setExecutionData({ ...executionData, [field.name]: e.target.value })}
-                              className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                              placeholder={field.placeholder}
-                              rows={3}
-                              required={field.required}
-                            />
-                          ) : /* Dropdown/Select */
-                          field.type === 'select' ? (
-                            <select
-                              value={executionData[field.name] || ''}
-                              onChange={(e) => setExecutionData({ ...executionData, [field.name]: e.target.value })}
-                              className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                              required={field.required}
-                            >
-                              <option value="" disabled>{field.placeholder || 'Select an option'}</option>
-                              {field.options?.map((option: string, index: number) => (
-                                <option key={index} value={option} className="bg-slate-800 text-white">
-                                  {option}
-                                </option>
-                              ))}
-                            </select>
-                          ) : /* Radio Buttons */
-                          field.type === 'radio' ? (
-                            <div className="space-y-2">
-                              {field.options?.map((option: string, index: number) => (
-                                <label key={index} className="flex items-center space-x-3 cursor-pointer">
-                                  <input
-                                    type="radio"
-                                    name={field.name}
-                                    value={option}
-                                    checked={executionData[field.name] === option}
-                                    onChange={(e) => setExecutionData({ ...executionData, [field.name]: e.target.value })}
-                                    className="w-4 h-4 text-cyan-500 bg-white/5 border-white/10 focus:ring-cyan-500"
-                                    required={field.required}
-                                  />
-                                  <span className="text-gray-300">{option}</span>
-                                </label>
-                              ))}
-                            </div>
-                          ) : /* Regular Input (text, number, email, url, etc.) */
-                          (
-                            <input
-                              type={field.type}
-                              value={executionData[field.name] || ''}
-                              onChange={(e) => setExecutionData({ ...executionData, [field.name]: e.target.value })}
-                              className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                              placeholder={field.placeholder}
-                              required={field.required}
-                            />
-                          )}
-                        </div>
-                      ))}
-
-                      {executionError && (
-                        <div className="p-4 bg-red-500/20 border border-red-500/50 rounded-lg">
-                          <p className="text-red-200 text-sm">{executionError}</p>
-                        </div>
-                      )}
-
-                      {executionResult && (
-                        <ResponseRenderer
-                          response={executionResult}
-                          title="Execution Successful!"
-                        />
-                      )}
-
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => handleExecuteAgent(purchasedAgent)}
-                          disabled={executing || (user?.email !== 'team@irizpro.com' && userCredits < purchasedAgent.agent.credit_cost)}
-                          className="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {executing ? 'Executing...' : user?.email === 'team@irizpro.com' ? 'Execute (Free for Admin)' : `Execute (${purchasedAgent.agent.credit_cost} credits)`}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedAgent(null)
-                            setExecutionData({})
-                            setExecutionError(null)
-                            setExecutionResult(null)
-                          }}
-                          className="px-6 py-3 bg-white/5 border border-white/10 text-white rounded-lg hover:bg-white/10 transition-all"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                    )
-                  ) : (
-                    <div className="grid grid-cols-1 gap-3">
+                    {/* Show Manage Credentials button if agent requires credentials */}
+                    {(purchasedAgent.agent.required_platforms?.length ?? 0) > 0 && (
                       <button
-                        onClick={() => handleAgentClick(purchasedAgent)}
-                        className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300"
+                        onClick={() => {
+                          setModalAgent(purchasedAgent)
+                          setShowCredentialSidebar(true)
+                        }}
+                        className="w-full py-2 bg-white/5 border border-white/10 text-gray-300 rounded-lg hover:bg-white/10 transition-colors text-sm"
                       >
-                        🚀 Execute Agent
+                        🔐 Manage Credentials ({purchasedAgent.agent.required_platforms?.length ?? 0} platforms)
                       </button>
-
-                      {/* Show Manage Credentials button if agent requires credentials */}
-                      {(purchasedAgent.agent.required_platforms?.length ?? 0) > 0 && (
-                        <button
-                          onClick={() => {
-                            setSelectedAgent(purchasedAgent)
-                            setShowCredentialSidebar(true)
-                          }}
-                          className="w-full py-2 bg-white/5 border border-white/10 text-gray-300 rounded-lg hover:bg-white/10 transition-colors text-sm"
-                        >
-                          🔐 Manage Credentials ({purchasedAgent.agent.required_platforms?.length ?? 0} platforms)
-                        </button>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -539,22 +427,38 @@ function DashboardContent() {
         </div>
       </div>
 
+      {/* Agent Execution Modal */}
+      {modalAgent && (
+        <AgentExecutionModal
+          isOpen={modalAgent !== null}
+          onClose={handleCloseModal}
+          agent={modalAgent.agent}
+          onExecute={handleExecuteAgent}
+          executing={executing}
+          executionResult={executionResult}
+          executionError={executionError}
+          hasCredentials={credentialStatus?.has_all_credentials ?? true}
+          onManageCredentials={handleManageCredentials}
+          showCredentialSidebar={showCredentialSidebar}
+          onCloseCredentialSidebar={() => setShowCredentialSidebar(false)}
+          credentialStatus={credentialStatus}
+        />
+      )}
+
       {/* Credential Management Sidebar */}
-      {selectedAgent && selectedAgent.agent.required_platforms && (
+      {modalAgent && modalAgent.agent.required_platforms && (
         <CredentialManagementSidebar
-          agentId={selectedAgent.agent_id}
-          agentName={selectedAgent.agent.name}
-          requiredPlatforms={selectedAgent.agent.required_platforms}
+          agentId={modalAgent.agent_id}
+          agentName={modalAgent.agent.name}
+          requiredPlatforms={modalAgent.agent.required_platforms}
           isOpen={showCredentialSidebar}
           onClose={() => {
             setShowCredentialSidebar(false)
-            // Optionally deselect agent when closing sidebar
-            // setSelectedAgent(null)
           }}
           onCredentialsUpdated={async () => {
             // Refresh credential status after update
-            if (selectedAgent) {
-              const status = await checkCredentialStatus(selectedAgent.agent_id)
+            if (modalAgent) {
+              const status = await checkCredentialStatus(modalAgent.agent_id)
               setCredentialStatus(status)
             }
           }}

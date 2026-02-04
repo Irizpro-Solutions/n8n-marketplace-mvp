@@ -45,7 +45,8 @@ export default function RunWorkflowForm({ workflow }: any) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to run workflow");
 
-      setResult(data);
+      // Extract the actual result data from API response
+      setResult(data.data);
     } catch (e: any) {
       setError(e.message);
     }
@@ -127,12 +128,16 @@ export default function RunWorkflowForm({ workflow }: any) {
       )}
 
       {/* Result */}
-      {result && (
-        <ResponseRenderer
-          response={result.result || result}
-          title="Execution Result"
-        />
-      )}
+      {result && (() => {
+        console.log('[RunForm] Result state:', result);
+        console.log('[RunForm] Passing to ResponseRenderer:', result.result);
+        return (
+          <ResponseRenderer
+            response={result.result}
+            title="Execution Result"
+          />
+        );
+      })()}
     </div>
   );
 }

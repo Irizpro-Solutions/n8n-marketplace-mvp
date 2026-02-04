@@ -39,10 +39,27 @@ export async function GET(req: NextRequest) {
     }
 
     // 3. Check if user has all required credentials for this agent (platform-based)
-    const { hasAll, missing, required } = await hasAllRequiredCredentials(user.id, agentId);
+    let hasAll = true;
+    let missing: string[] = [];
+    let required: string[] = [];
+    let credentials: any[] = [];
 
-    // 4. Get list of user's credentials for this agent
-    const credentials = await listAgentCredentials(user.id, agentId);
+    try {
+      const credCheck = await hasAllRequiredCredentials(user.id, agentId);
+      hasAll = credCheck.hasAll;
+      missing = credCheck.missing;
+      required = credCheck.required;
+
+      // 4. Get list of user's credentials for this agent
+      credentials = await listAgentCredentials(user.id, agentId);
+    } catch (credError) {
+      console.error('[API] Credential check error:', credError);
+      // Return empty/default values instead of failing completely
+      hasAll = false;
+      missing = [];
+      required = [];
+      credentials = [];
+    }
 
     // 5. Return detailed status
     return NextResponse.json({
@@ -54,8 +71,10 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error('[API] Get credentials status error:', error);
+    const errorMessage = error instanceof Error ? error.message : ERROR_MESSAGES.GENERIC.INTERNAL_ERROR;
+    console.error('[API] Error details:', errorMessage);
     return NextResponse.json(
-      { error: ERROR_MESSAGES.GENERIC.INTERNAL_ERROR },
+      { error: errorMessage },
       { status: HTTP_STATUS.INTERNAL_SERVER_ERROR }
     );
   }
