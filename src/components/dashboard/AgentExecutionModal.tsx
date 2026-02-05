@@ -4,7 +4,6 @@ import { useState, Fragment } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { X, Loader2, Settings } from 'lucide-react'
 import ResponseRenderer from '@/components/workflows/ResponseRenderer'
-import CredentialManagementSidebar from '@/components/credentials/CredentialManagementSidebar'
 
 interface AgentExecutionModalProps {
   isOpen: boolean
@@ -16,8 +15,6 @@ interface AgentExecutionModalProps {
   executionError: string | null
   hasCredentials?: boolean
   onManageCredentials?: () => void
-  showCredentialSidebar?: boolean
-  onCloseCredentialSidebar?: () => void
 }
 
 export default function AgentExecutionModal({
@@ -30,8 +27,6 @@ export default function AgentExecutionModal({
   executionError,
   hasCredentials = true,
   onManageCredentials,
-  showCredentialSidebar = false,
-  onCloseCredentialSidebar,
 }: AgentExecutionModalProps) {
   const [inputs, setInputs] = useState<Record<string, string>>({})
 
@@ -155,10 +150,24 @@ export default function AgentExecutionModal({
                                       onChange={(e) => handleInputChange(field.name, e.target.value)}
                                       required={field.required}
                                       className="w-full px-4 py-3 bg-white/5 border border-purple-500/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                                      style={{
+                                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                        color: 'white'
+                                      }}
                                     >
-                                      <option value="">Select...</option>
+                                      <option value="" style={{ backgroundColor: '#1a1625', color: 'white' }}>
+                                        Select...
+                                      </option>
                                       {field.options?.map((option: string) => (
-                                        <option key={option} value={option}>
+                                        <option
+                                          key={option}
+                                          value={option}
+                                          style={{
+                                            backgroundColor: '#1a1625',
+                                            color: 'white',
+                                            padding: '10px'
+                                          }}
+                                        >
                                           {option}
                                         </option>
                                       ))}
@@ -231,17 +240,6 @@ export default function AgentExecutionModal({
           </div>
         </Dialog>
       </Transition>
-
-      {/* Credential Sidebar */}
-      {showCredentialSidebar && onCloseCredentialSidebar && (
-        <CredentialManagementSidebar
-          isOpen={showCredentialSidebar}
-          onClose={onCloseCredentialSidebar}
-          agentId={agent.id}
-          agentName={agent.name}
-          requiredPlatforms={agent.required_platforms || []}
-        />
-      )}
     </>
   )
 }

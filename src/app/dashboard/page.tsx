@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { User } from '@supabase/supabase-js'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
 import ModernBackground from '@/components/layouts/ModernBackground'
 import ModernHeader from '@/components/layouts/ModernHeader'
 import AgentExecutionModal from '@/components/dashboard/AgentExecutionModal'
@@ -40,7 +41,7 @@ function DashboardContent() {
   const [purchasedAgents, setPurchasedAgents] = useState<PurchasedAgent[]>([])
   const [loading, setLoading] = useState(true)
   const [modalAgent, setModalAgent] = useState<PurchasedAgent | null>(null)
-  const [showCredentialSidebar, setShowCredentialSidebar] = useState(false)
+  const [credentialAgent, setCredentialAgent] = useState<PurchasedAgent | null>(null)
   const [credentialStatus, setCredentialStatus] = useState<CredentialStatus | null>(null)
   const [checkingCredentials, setCheckingCredentials] = useState(false)
   const [executing, setExecuting] = useState(false)
@@ -173,7 +174,7 @@ function DashboardContent() {
   }
 
   const handleAgentClick = async (purchasedAgent: PurchasedAgent) => {
-    setModalAgent(purchasedAgent)
+    // Reset states
     setExecutionError(null)
     setExecutionResult(null)
     setCredentialStatus(null)
@@ -182,30 +183,48 @@ function DashboardContent() {
     const requiredPlatforms = purchasedAgent.agent.required_platforms || []
 
     if (requiredPlatforms.length === 0) {
-      // No credentials required, show execution modal directly
+      // No credentials required, open modal directly
+      setModalAgent(purchasedAgent)
       return
     }
 
-    // Dynamic credential detection: Check if user has all required credentials
-    // Don't await - let modal open immediately, check credentials in background
-    checkCredentialStatus(purchasedAgent.agent_id).then(status => {
-      if (status) {
-        setCredentialStatus(status)
+    // Agent requires credentials - check if user has configured them
+    toast.loading('Checking credentials...', { id: 'credential-check' })
 
-        if (!status.has_all_credentials && status.missing_platforms.length > 0) {
-          // Missing credentials - show warning
-          setExecutionError(
-            `⚠️ Missing ${status.missing_platforms.length} credential(s): ${status.missing_platforms.join(', ')}. Please connect these credentials before running this agent.`
-          )
-        } else {
-          // All credentials connected - allow execution
-          console.log('✅ All credentials connected for', purchasedAgent.agent.name)
-        }
+    try {
+      const status = await checkCredentialStatus(purchasedAgent.agent_id)
+
+      if (!status) {
+        toast.error('Failed to check credentials', { id: 'credential-check' })
+        return
       }
-    }).catch(err => {
+
+      setCredentialStatus(status)
+
+      if (!status.has_all_credentials && status.missing_platforms.length > 0) {
+        // Missing credentials - show toast and prevent modal from opening
+        toast.error(
+          `Missing ${status.missing_platforms.length} credential(s): ${status.missing_platforms.join(', ')}. Please configure credentials first.`,
+          {
+            id: 'credential-check',
+            duration: 5000,
+            action: {
+              label: 'Manage Credentials',
+              onClick: () => handleManageCredentialsClick(purchasedAgent)
+            }
+          }
+        )
+        return
+      }
+
+      // All credentials configured - open modal and allow execution
+      toast.success('All credentials configured ✓', { id: 'credential-check' })
+      setModalAgent(purchasedAgent)
+
+    } catch (err) {
       console.error('Credential check failed:', err)
-      // Don't block modal - just log the error
-    })
+      toast.error('Failed to verify credentials', { id: 'credential-check' })
+    }
   }
 
   const handleExecuteAgent = async (inputs: Record<string, string>) => {
@@ -256,16 +275,29 @@ function DashboardContent() {
     }
   }
 
-  const handleManageCredentials = () => {
-    // Close modal when opening credential sidebar so it's not blocked
+  const handleManageCredentialsClick = (purchasedAgent: PurchasedAgent) => {
+    // Only open credential sidebar, do NOT open modal
+    // This ensures mutually exclusive UI rendering
+    setCredentialAgent(purchasedAgent)
+    setModalAgent(null) // Ensure modal is closed
+  }
+
+  const handleManageCredentialsFromModal = () => {
+    // Called from inside the modal - close modal and open sidebar
+    if (!modalAgent) return
+
+    setCredentialAgent(modalAgent)
     setModalAgent(null)
-    setShowCredentialSidebar(true)
   }
 
   const handleCloseModal = () => {
     setModalAgent(null)
     setExecutionError(null)
     setExecutionResult(null)
+  }
+
+  const handleCloseCredentialSidebar = () => {
+    setCredentialAgent(null)
   }
 
   if (loading) {
@@ -410,10 +442,7 @@ function DashboardContent() {
                     {/* Show Manage Credentials button if agent requires credentials */}
                     {(purchasedAgent.agent.required_platforms?.length ?? 0) > 0 && (
                       <button
-                        onClick={() => {
-                          setModalAgent(purchasedAgent)
-                          setShowCredentialSidebar(true)
-                        }}
+                        onClick={() => handleManageCredentialsClick(purchasedAgent)}
                         className="w-full py-2 bg-white/5 border border-white/10 text-gray-300 rounded-lg hover:bg-white/10 transition-colors text-sm"
                       >
                         🔐 Manage Credentials ({purchasedAgent.agent.required_platforms?.length ?? 0} platforms)
@@ -438,27 +467,26 @@ function DashboardContent() {
           executionResult={executionResult}
           executionError={executionError}
           hasCredentials={credentialStatus?.has_all_credentials ?? true}
-          onManageCredentials={handleManageCredentials}
-          showCredentialSidebar={showCredentialSidebar}
-          onCloseCredentialSidebar={() => setShowCredentialSidebar(false)}
+          onManageCredentials={handleManageCredentialsFromModal}
         />
       )}
 
-      {/* Credential Management Sidebar */}
-      {modalAgent && modalAgent.agent.required_platforms && (
+      {/* Credential Management Sidebar - Independent of Modal */}
+      {credentialAgent && credentialAgent.agent.required_platforms && (
         <CredentialManagementSidebar
-          agentId={modalAgent.agent_id}
-          agentName={modalAgent.agent.name}
-          requiredPlatforms={modalAgent.agent.required_platforms}
-          isOpen={showCredentialSidebar}
-          onClose={() => {
-            setShowCredentialSidebar(false)
-          }}
+          agentId={credentialAgent.agent_id}
+          agentName={credentialAgent.agent.name}
+          requiredPlatforms={credentialAgent.agent.required_platforms}
+          isOpen={credentialAgent !== null}
+          onClose={handleCloseCredentialSidebar}
           onCredentialsUpdated={async () => {
             // Refresh credential status after update
-            if (modalAgent) {
-              const status = await checkCredentialStatus(modalAgent.agent_id)
-              setCredentialStatus(status)
+            const status = await checkCredentialStatus(credentialAgent.agent_id)
+            setCredentialStatus(status)
+
+            // Show success toast
+            if (status?.has_all_credentials) {
+              toast.success('All credentials configured successfully! You can now execute this agent.')
             }
           }}
         />

@@ -75,6 +75,65 @@ function PurchasePageContent() {
 
   const totalAmount = creditAmount * creditCost
 
+  // Separate async function for payment verification
+  const verifyPaymentAsync = async (response: any) => {
+    try {
+      console.log('📡 Starting payment verification API call...')
+
+      const verifyResponse = await fetch('/api/razorpay/verify-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+          packageId: `agent_${agentId}`,
+          amount: totalAmount,
+          credits: creditAmount,
+          currency: currency,
+        })
+      })
+
+      console.log('📡 Verification response status:', verifyResponse.status)
+
+      let verifyData
+      try {
+        verifyData = await verifyResponse.json()
+        console.log('📋 Verification response data:', verifyData)
+      } catch (parseError) {
+        console.error('❌ Failed to parse verification response:', parseError)
+        const text = await verifyResponse.text()
+        console.error('❌ Response text:', text.substring(0, 500))
+        throw new Error('Server response was not valid JSON')
+      }
+
+      if (verifyResponse.ok && verifyData.success) {
+        console.log('✅ Payment verified successfully!')
+        console.log('📊 Credits added:', verifyData.data?.credits_added)
+        console.log('💰 New balance:', verifyData.data?.new_balance)
+
+        alert('🎉 Payment successful! Agent purchased successfully. Redirecting to dashboard...')
+
+        // Redirect to dashboard with success parameter
+        setTimeout(() => {
+          console.log('🔄 Redirecting to dashboard...')
+          window.location.href = '/dashboard?payment=success'
+        }, 1500)
+      } else {
+        console.error('❌ Verification failed:', verifyData)
+        alert(`❌ Payment verification failed: ${verifyData.error || 'Unknown error'}. Please contact support with payment ID: ${response.razorpay_payment_id}`)
+        setLoading(false)
+      }
+    } catch (verifyError: any) {
+      console.error('❌ Verification error:', verifyError)
+      alert(`❌ Payment verification failed: ${verifyError.message}. Please contact support with payment ID: ${response.razorpay_payment_id}`)
+      setLoading(false)
+    }
+  }
+
   const handlePayment = async () => {
     if (!window.Razorpay) {
       alert('Razorpay not loaded. Please refresh and try again.')
@@ -118,7 +177,7 @@ function PurchasePageContent() {
         description: `${creditAmount} credits for ${agentName}`,
         order_id: orderData.orderId,
         prefill: {
-          name: user?.user_metadata?.full_name || '',
+          name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || '',
           email: user?.email || '',
         },
         notes: {
@@ -127,74 +186,47 @@ function PurchasePageContent() {
           credits: creditAmount.toString(),
           user_id: user?.id
         },
-        // **CRITICAL FIX** - Enhanced handler with better logging and error handling
-        handler: async (response: any) => {
-          console.log('🔥 Payment successful! Starting verification...', response)
+        // **CRITICAL FIX** - Synchronous handler for Razorpay success animation
+        handler: (response: any) => {
+          console.log('🔥 Payment successful! Handler triggered', response)
           console.log('📋 Payment response details:', {
             order_id: response.razorpay_order_id,
             payment_id: response.razorpay_payment_id,
             signature_present: !!response.razorpay_signature
           })
-          
-          try {
-            // Call verification endpoint with detailed logging
-            console.log('📡 Calling verification API...')
-            const verifyResponse = await fetch('/api/razorpay/verify-payment', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-              },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                packageId: `agent_${agentId}`,
-                amount: totalAmount,
-                credits: creditAmount,
-                currency: currency,
-              })
-            })
 
-            console.log('📡 Verification response status:', verifyResponse.status)
-            
-            let verifyData
-            try {
-              verifyData = await verifyResponse.json()
-              console.log('📋 Verification data:', verifyData)
-            } catch (parseError) {
-              console.error('❌ Failed to parse verification response:', parseError)
-              throw new Error('Server response was not valid JSON')
-            }
-            
-            if (verifyResponse.ok && verifyData.success) {
-              console.log('✅ Verification successful! Redirecting...')
-              alert('🎉 Payment successful! Agent purchased successfully. Redirecting to dashboard...')
-              
-              // Force redirect after a short delay
-              setTimeout(() => {
-                window.location.href = '/dashboard?payment=success'
-              }, 1000)
-            } else {
-              console.error('❌ Verification failed:', verifyData)
-              alert(`❌ Payment verification failed: ${verifyData.error || 'Unknown error'}. Please contact support with payment ID: ${response.razorpay_payment_id}`)
-            }
-          } catch (verifyError) {
-            console.error('❌ Verification network error:', verifyError)
-            alert(`❌ Payment verification failed due to network error. Please contact support with payment ID: ${response.razorpay_payment_id}`)
-          } finally {
-            // Always reset loading state
+          // Validate response has required fields
+          if (!response.razorpay_order_id || !response.razorpay_payment_id || !response.razorpay_signature) {
+            console.error('❌ Invalid payment response from Razorpay', response)
+            alert('Payment response invalid. Please contact support.')
             setLoading(false)
+            return
           }
+
+          // Show success message immediately (allows Razorpay animation to complete)
+          console.log('✅ Payment captured by Razorpay, starting verification...')
+
+          // Run verification in background (non-blocking to allow Razorpay animation)
+          setTimeout(() => {
+            verifyPaymentAsync(response)
+          }, 100)
         },
         modal: {
           ondismiss: () => {
             console.log('❌ Payment modal closed by user')
             setLoading(false)
-          }
+          },
+          // Prevent accidental closure during payment
+          escape: false,
+          backdropclose: false,
         },
         theme: {
           color: '#8B5CF6'
+        },
+        // Retry configuration
+        retry: {
+          enabled: true,
+          max_count: 3
         }
       }
 
