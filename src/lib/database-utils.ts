@@ -228,10 +228,14 @@ export async function isPaymentProcessed(paymentId: string): Promise<boolean> {
 
 /**
  * Gets or creates default credit package for agent purchases
+ * @param amount - Amount in the actual currency paid (INR, USD, etc.)
+ * @param credits - Number of credits being purchased
+ * @param currency - Currency code (INR, USD, AED, EUR, etc.)
  */
 export async function getOrCreateDefaultPackage(
   amount: number,
-  credits: number
+  credits: number,
+  currency: string = 'INR'
 ) {
   const supabase = supabaseAdmin;
 
@@ -246,6 +250,28 @@ export async function getOrCreateDefaultPackage(
     return existingPackage.id;
   }
 
+  // Convert amount to INR for storage (credit_packages.price_inr field)
+  // Exchange rates from currency.ts
+  const exchangeRates: Record<string, number> = {
+    INR: 1,       // Base currency
+    USD: 83.5,    // 1 USD = 83.5 INR
+    AED: 22.7,    // 1 AED = 22.7 INR
+    EUR: 91.2,    // 1 EUR = 91.2 INR
+    GBP: 106.5,   // 1 GBP = 106.5 INR
+  };
+
+  // Convert to INR
+  const rate = exchangeRates[currency.toUpperCase()] || exchangeRates.INR;
+  const amountInINR = Math.round(amount * rate);
+
+  console.log('[PACKAGE] Converting to INR', {
+    originalAmount: amount,
+    currency,
+    rate,
+    amountInINR,
+    credits
+  });
+
   // Create new default package
   const { data: newPackage, error } = await supabase
     .from(DATABASE.TABLES.CREDIT_PACKAGES)
@@ -253,15 +279,29 @@ export async function getOrCreateDefaultPackage(
       name: 'Agent Purchase Credits',
       description: 'Credits for individual agent purchases',
       credits,
-      price_inr: Math.round(amount),
+      price_inr: amountInINR,
       is_active: true,
     })
     .select('id')
     .single();
 
   if (error || !newPackage) {
+    console.error('[PACKAGE] Failed to create package', {
+      error: error?.message,
+      code: error?.code,
+      details: error?.details,
+      amountInINR,
+      credits,
+      currency
+    });
     throw new AppError(500, 'Failed to create credit package', 'DB_ERROR', error);
   }
+
+  console.log('[PACKAGE] Created new package', {
+    packageId: newPackage.id,
+    amountInINR,
+    credits
+  });
 
   return newPackage.id;
 }

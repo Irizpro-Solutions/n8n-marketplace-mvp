@@ -104,7 +104,7 @@ export const POST = withRateLimit(
 
     if (packageId.startsWith(AGENT.PACKAGE_PREFIX)) {
       agentId = packageId.replace(AGENT.PACKAGE_PREFIX, '');
-      finalPackageId = await getOrCreateDefaultPackage(amount, credits);
+      finalPackageId = await getOrCreateDefaultPackage(amount, credits, currency);
     }
 
     // 5. Process payment atomically (includes idempotency check)
