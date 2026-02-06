@@ -121,6 +121,7 @@ export const POST = withRateLimit(
       amount: Math.round(amount * PAYMENT.PAISE_MULTIPLIER),
       currency: currency,
       receipt: `cp_${Date.now().toString().slice(-8)}`,
+      payment_capture: true,
       notes: {
         user_id: userId,
         user_email: userEmail,
