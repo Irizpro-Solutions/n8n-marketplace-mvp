@@ -1,10 +1,11 @@
 /**
  * Create Razorpay Order Route
- * Creates a Razorpay payment order with metadata
+ * Creates a Razorpay payment order with server-validated pricing
  *
  * Security Features:
  * - Rate limiting (10 requests/minute)
  * - Input validation with Zod
+ * - Server-side agent lookup and price calculation (never trusts client amount)
  * - Standard error handling
  * - Audit logging
  * - Profile creation if needed
@@ -13,6 +14,7 @@
 import { NextRequest } from 'next/server';
 import Razorpay from 'razorpay';
 import { supabaseServer } from '@/lib/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import {
   asyncHandler,
   successResponse,
@@ -22,12 +24,14 @@ import {
 import { createOrderSchema } from '@/lib/validation-schemas';
 import { withRateLimit, paymentRateLimiter } from '@/lib/rate-limiter';
 import { recordAuditLog } from '@/lib/database-utils';
+import { getPrice, type PricingConfig } from '@/lib/currency';
 import {
   PAYMENT,
   ERROR_MESSAGES,
   HTTP_STATUS,
   AUDIT_LOG,
   DATABASE,
+  AGENT,
 } from '@/lib/constants';
 
 export const POST = withRateLimit(
@@ -42,15 +46,12 @@ export const POST = withRateLimit(
       throw new Error('Payment configuration error. Please contact support.');
     }
 
-    // 2. Validate request body
+    // 2. Validate request body (no amount or packageId from client)
     const validatedData = await req.json().then((data) =>
       createOrderSchema.parse(data)
     );
 
-    const { packageId, amount, credits, currency = 'INR' } = validatedData;
-
-    // Currency will be determined by the new pricing system
-    console.log('[Payment] Creating order with currency:', currency);
+    const { agentId, credits, currency = 'INR' } = validatedData;
 
     // 3. Authenticate user
     const supabase = await supabaseServer();
@@ -66,7 +67,36 @@ export const POST = withRateLimit(
     const userId = user.id;
     const userEmail = user.email ?? '';
 
-    // 4. Ensure user profile exists
+    // 4. Look up agent from database (server-side price source of truth)
+    const { data: agent, error: agentError } = await supabaseAdmin
+      .from(DATABASE.TABLES.AGENTS)
+      .select('id, name, credit_cost, pricing_config, is_active')
+      .eq('id', agentId)
+      .single();
+
+    if (agentError || !agent) {
+      throw new ValidationError('Agent not found');
+    }
+
+    if (!agent.is_active) {
+      throw new ValidationError('Agent is not available for purchase');
+    }
+
+    // 5. Server-side price calculation (never trust client-provided amount)
+    const pricingConfig: PricingConfig = agent.pricing_config || { basePrice: agent.credit_cost };
+    const pricePerCredit = getPrice(pricingConfig, currency);
+    const totalAmount = Math.round(pricePerCredit * credits * 100) / 100;
+    const packageId = `${AGENT.PACKAGE_PREFIX}${agentId}`;
+
+    console.log('[Payment] Server-computed pricing:', {
+      agentId,
+      currency,
+      pricePerCredit,
+      credits,
+      totalAmount,
+    });
+
+    // 6. Ensure user profile exists
     const { data: existingProfile } = await supabase
       .from(DATABASE.TABLES.PROFILES)
       .select('id')
@@ -74,7 +104,6 @@ export const POST = withRateLimit(
       .maybeSingle();
 
     if (!existingProfile) {
-      // Create user profile if it doesn't exist
       const now = new Date().toISOString();
       const { error: profileError } = await supabase
         .from(DATABASE.TABLES.PROFILES)
@@ -90,7 +119,7 @@ export const POST = withRateLimit(
           total_executions: 0,
           membership_tier: 'free',
           is_active: true,
-          role: 'user', // Add role field
+          role: 'user',
           created_at: now,
           updated_at: now,
         });
@@ -111,14 +140,14 @@ export const POST = withRateLimit(
       console.log('[PROFILE] Created new profile', { user_id: userId });
     }
 
-    // 5. Create Razorpay order
+    // 7. Create Razorpay order with server-computed amount
     const razorpay = new Razorpay({
       key_id: razorpayKeyId,
       key_secret: razorpayKeySecret,
     });
 
     const order = await razorpay.orders.create({
-      amount: Math.round(amount * PAYMENT.PAISE_MULTIPLIER),
+      amount: Math.round(totalAmount * PAYMENT.PAISE_MULTIPLIER),
       currency: currency,
       receipt: `cp_${Date.now().toString().slice(-8)}`,
       payment_capture: true,
@@ -126,20 +155,23 @@ export const POST = withRateLimit(
         user_id: userId,
         user_email: userEmail,
         package_id: packageId,
+        agent_id: agentId,
+        agent_name: agent.name,
         credits: String(credits),
-        amount: String(amount),
+        amount: String(totalAmount),
         currency: currency,
+        price_per_credit: String(pricePerCredit),
       },
     });
 
     console.log('[PAYMENT] Razorpay order created', {
       order_id: order.id,
       user_id: userId,
-      amount,
+      amount: totalAmount,
       credits,
     });
 
-    // 6. Record audit log
+    // 8. Record audit log
     await recordAuditLog({
       userId,
       action: AUDIT_LOG.ACTION.CREATE,
@@ -147,8 +179,11 @@ export const POST = withRateLimit(
       resourceId: order.id,
       details: {
         order_id: order.id,
+        agent_id: agentId,
+        agent_name: agent.name,
         package_id: packageId,
-        amount,
+        amount: totalAmount,
+        price_per_credit: pricePerCredit,
         credits,
         currency: currency,
       },
@@ -156,12 +191,15 @@ export const POST = withRateLimit(
       userAgent: req.headers.get('user-agent') || undefined,
     });
 
-    // 7. Return order ID
+    // 9. Return order details (frontend uses server-provided amounts)
     return successResponse(
       {
         orderId: order.id,
-        amount: order.amount,
+        amount: order.amount,        // Amount in paise (for Razorpay modal)
         currency: order.currency,
+        agentName: agent.name,
+        pricePerCredit,
+        totalAmount,                 // Human-readable amount
       },
       HTTP_STATUS.CREATED
     );

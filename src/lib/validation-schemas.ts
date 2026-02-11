@@ -11,15 +11,13 @@ import { AGENT, PAYMENT, CREDIT_TRANSACTION } from './constants';
 // ============================================
 
 export const createOrderSchema = z.object({
-  packageId: z.string().min(1, 'Package ID is required'),
-  amount: z.number()
-    .positive('Amount must be positive')
-    .max(1000000, 'Amount exceeds maximum limit'),
+  agentId: z.string().uuid('Invalid agent ID'),
   credits: z.number()
     .int('Credits must be an integer')
     .positive('Credits must be positive')
-    .max(100000, 'Credits exceed maximum limit'),
-  currency: z.enum(['INR', 'USD', 'AED', 'EUR']).optional().default('USD'),
+    .min(1, 'Minimum 1 credit')
+    .max(30, 'Maximum 30 credits'),
+  currency: z.enum(['INR', 'USD', 'AED', 'EUR', 'GBP']).optional().default('INR'),
 });
 
 export const verifyPaymentSchema = z.object({
@@ -27,9 +25,8 @@ export const verifyPaymentSchema = z.object({
   razorpay_payment_id: z.string().min(1, 'Payment ID is required'),
   razorpay_signature: z.string().min(1, 'Signature is required'),
   packageId: z.string().min(1, 'Package ID is required'),
-  amount: z.number().positive('Amount must be positive'),
   credits: z.number().int().positive('Credits must be positive'),
-  currency: z.enum(['INR', 'USD', 'AED', 'EUR']).optional().default('USD'),
+  currency: z.enum(['INR', 'USD', 'AED', 'EUR', 'GBP']).optional().default('INR'),
 });
 
 export const webhookPayloadSchema = z.object({

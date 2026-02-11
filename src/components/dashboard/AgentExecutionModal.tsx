@@ -70,9 +70,9 @@ export default function AgentExecutionModal({
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-5xl transform overflow-hidden rounded-2xl bg-[#1a1625] border border-purple-500/20 shadow-2xl transition-all">
+                <Dialog.Panel className="w-full max-w-5xl transform overflow-hidden rounded-2xl bg-slate-950/95 backdrop-blur-xl border border-white/10 shadow-2xl transition-all">
                   {/* Header */}
-                  <div className="flex items-center justify-between border-b border-purple-500/20 bg-gradient-to-r from-purple-900/20 to-pink-900/20 px-6 py-4">
+                  <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-cyan-900/10 to-purple-900/10 px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center text-2xl">
                         {agent.icon_url || '🤖'}
@@ -142,7 +142,7 @@ export default function AgentExecutionModal({
                                       onChange={(e) => handleInputChange(field.name, e.target.value)}
                                       placeholder={field.placeholder || field.label}
                                       required={field.required}
-                                      className="w-full px-4 py-3 bg-white/5 border border-purple-500/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 min-h-[100px]"
+                                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 min-h-[100px]"
                                     />
                                   ) : field.type === 'select' ? (
                                     <select
@@ -155,7 +155,7 @@ export default function AgentExecutionModal({
                                         color: 'white'
                                       }}
                                     >
-                                      <option value="" style={{ backgroundColor: '#1a1625', color: 'white' }}>
+                                      <option value="" style={{ backgroundColor: '#0f172a', color: 'white' }}>
                                         Select...
                                       </option>
                                       {field.options?.map((option: string) => (
@@ -163,7 +163,7 @@ export default function AgentExecutionModal({
                                           key={option}
                                           value={option}
                                           style={{
-                                            backgroundColor: '#1a1625',
+                                            backgroundColor: '#0f172a',
                                             color: 'white',
                                             padding: '10px'
                                           }}
@@ -179,7 +179,7 @@ export default function AgentExecutionModal({
                                       onChange={(e) => handleInputChange(field.name, e.target.value)}
                                       placeholder={field.placeholder || field.label}
                                       required={field.required}
-                                      className="w-full px-4 py-3 bg-white/5 border border-purple-500/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                                     />
                                   )}
                                 </div>
@@ -199,7 +199,7 @@ export default function AgentExecutionModal({
                   </div>
 
                   {/* Footer */}
-                  <div className="border-t border-purple-500/20 bg-[#13101c] px-6 py-4 flex items-center justify-between">
+                  <div className="border-t border-white/10 bg-slate-950/80 px-6 py-4 flex items-center justify-between">
                     <div className="text-sm text-gray-400">
                       {executionResult ? (
                         <span className="text-green-400">✓ Execution Complete</span>
@@ -220,7 +220,7 @@ export default function AgentExecutionModal({
                         <button
                           onClick={handleExecute}
                           disabled={executing || !hasCredentials}
-                          className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
                         >
                           {executing ? (
                             <>

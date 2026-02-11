@@ -3,6 +3,8 @@
 import { useState, useEffect, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import ModernBackground from '@/components/layouts/ModernBackground'
 
 function ResetPasswordContent() {
   const [password, setPassword] = useState('')
@@ -23,7 +25,7 @@ function ResetPasswordContent() {
     const checkSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession()
-        
+
         if (error) {
           setError('Invalid or expired reset link')
         } else if (!session) {
@@ -78,120 +80,147 @@ function ResetPasswordContent() {
 
   if (validating) {
     return (
-      <div className="min-h-screen bg-black text-green-400 font-mono flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-pulse text-2xl mb-4">◉ VALIDATING RESET LINK ◉</div>
-          <div className="text-sm">Verifying authorization...</div>
+      <ModernBackground>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-white text-lg">Validating reset link...</p>
+          </div>
         </div>
-      </div>
+      </ModernBackground>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black text-green-400 font-mono">
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-md mx-auto bg-gray-900 border border-orange-500 rounded-lg p-8">
-          <h1 className="text-2xl font-bold mb-6 text-center text-orange-400">
-            SET NEW PASSWORD
-          </h1>
+    <ModernBackground>
+      <div className="min-h-screen flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-md">
+          {/* Logo/Header */}
+          <div className="text-center mb-8">
+            <Link href="/" className="inline-flex items-center gap-2 group mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                <svg
+                  className="w-7 h-7 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
+                </svg>
+              </div>
+              <span className="text-2xl font-bold text-white">AgentHub</span>
+            </Link>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              Set New Password
+            </h1>
+            <p className="text-gray-400">
+              Enter your new password below
+            </p>
+          </div>
 
-          <p className="text-sm text-gray-400 mb-6 text-center">
-            Enter your new password below.
-          </p>
-
-          {error && (
-            <div className="bg-red-900 border border-red-500 text-red-200 p-3 rounded mb-4">
-              {error}
-              {error.includes('Invalid') && (
-                <div className="text-xs mt-2">
-                  <a href="/auth/reset" className="text-cyan-400 hover:underline">
-                    Request a new reset link
-                  </a>
-                </div>
-              )}
-            </div>
-          )}
-
-          <form onSubmit={handlePasswordReset} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">New Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 bg-black border border-gray-600 rounded focus:border-orange-400 focus:outline-none"
-                placeholder="Enter new password (min 6 characters)"
-                minLength={6}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Confirm New Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full px-3 py-2 bg-black border border-gray-600 rounded focus:border-orange-400 focus:outline-none"
-                placeholder="Confirm new password"
-                minLength={6}
-                required
-              />
-            </div>
-
-            {/* Password strength indicator */}
-            {password && (
-              <div className="text-xs">
-                <div className="flex items-center space-x-2">
-                  <span className="text-gray-400">Password strength:</span>
-                  <span className={`${
-                    password.length >= 8 ? 'text-green-400' : 
-                    password.length >= 6 ? 'text-yellow-400' : 'text-red-400'
-                  }`}>
-                    {password.length >= 8 ? 'Strong' : 
-                     password.length >= 6 ? 'Fair' : 'Weak'}
-                  </span>
-                </div>
-                <div className="mt-1">
-                  <div className={`text-xs ${password.length >= 6 ? 'text-green-400' : 'text-gray-500'}`}>
-                    ✓ At least 6 characters
-                  </div>
-                  <div className={`text-xs ${password === confirmPassword && password ? 'text-green-400' : 'text-gray-500'}`}>
-                    ✓ Passwords match
-                  </div>
-                </div>
+          {/* Form Card */}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl shadow-purple-500/5">
+            {error && (
+              <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg">
+                <p className="text-red-200 text-sm">{error}</p>
+                {error.includes('Invalid') && (
+                  <p className="text-xs mt-2">
+                    <Link href="/auth/reset" className="text-cyan-400 hover:text-cyan-300 transition-colors">
+                      Request a new reset link
+                    </Link>
+                  </p>
+                )}
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading || !password || !confirmPassword}
-              className="w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-700 text-white py-2 px-4 rounded transition-colors"
-            >
-              {loading ? 'Updating Password...' : 'Update Password'}
-            </button>
-          </form>
+            <form onSubmit={handlePasswordReset} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">New Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-transparent transition-all"
+                  placeholder="Enter new password (min 6 characters)"
+                  minLength={6}
+                  required
+                />
+              </div>
 
-          <div className="mt-6 text-center text-sm">
-            <a href="/auth/login" className="text-cyan-400 hover:underline">
-              Back to Login
-            </a>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-transparent transition-all"
+                  placeholder="Confirm new password"
+                  minLength={6}
+                  required
+                />
+              </div>
+
+              {/* Password strength indicator */}
+              {password && (
+                <div className="text-xs">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-gray-400">Password strength:</span>
+                    <span className={`${
+                      password.length >= 8 ? 'text-green-400' :
+                      password.length >= 6 ? 'text-yellow-400' : 'text-red-400'
+                    }`}>
+                      {password.length >= 8 ? 'Strong' :
+                       password.length >= 6 ? 'Fair' : 'Weak'}
+                    </span>
+                  </div>
+                  <div className="mt-1">
+                    <div className={`text-xs ${password.length >= 6 ? 'text-green-400' : 'text-gray-500'}`}>
+                      ✓ At least 6 characters
+                    </div>
+                    <div className={`text-xs ${password === confirmPassword && password ? 'text-green-400' : 'text-gray-500'}`}>
+                      ✓ Passwords match
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || !password || !confirmPassword}
+                className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Updating Password...' : 'Update Password'}
+              </button>
+            </form>
+
+            <div className="mt-6 text-center text-sm">
+              <Link href="/auth/login" className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors">
+                Back to Login
+              </Link>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </ModernBackground>
   )
 }
 
 export default function ResetPasswordPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-black text-green-400 font-mono flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-pulse text-2xl mb-4">◉ LOADING ◉</div>
-          <div className="text-sm">Initializing reset form...</div>
+      <ModernBackground>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-white text-lg">Loading...</p>
+          </div>
         </div>
-      </div>
+      </ModernBackground>
     }>
       <ResetPasswordContent />
     </Suspense>

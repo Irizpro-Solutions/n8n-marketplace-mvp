@@ -5,6 +5,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { User } from '@supabase/supabase-js'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
+import { Bot, Play, KeyRound, PackageSearch, Coins } from 'lucide-react'
 import ModernBackground from '@/components/layouts/ModernBackground'
 import ModernHeader from '@/components/layouts/ModernHeader'
 import AgentExecutionModal from '@/components/dashboard/AgentExecutionModal'
@@ -325,7 +326,7 @@ function DashboardContent() {
               <h1 className="text-4xl font-bold text-white">My Dashboard</h1>
               {user?.email === 'team@irizpro.com' && (
                 <span className="px-3 py-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-sm font-bold rounded-full">
-                  👑 ADMIN
+                  ADMIN
                 </span>
               )}
             </div>
@@ -334,71 +335,18 @@ function DashboardContent() {
                 ? 'All agents available • Unlimited executions • No credit cost'
                 : 'Manage and execute your AI agents'}
             </p>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-xl flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400">Available Credits</p>
-                  <p className="text-2xl font-bold text-white">
-                    {user?.email === 'team@irizpro.com' ? '∞' : userCredits}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400">
-                    {user?.email === 'team@irizpro.com' ? 'Available Agents' : 'Purchased Agents'}
-                  </p>
-                  <p className="text-2xl font-bold text-white">{purchasedAgents.length}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl flex items-center justify-center">
-                  <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400">Quick Actions</p>
-                  <button
-                    onClick={() => router.push('/browse')}
-                    className="text-sm text-cyan-400 hover:text-cyan-300 font-medium"
-                  >
-                    Browse More Agents →
-                  </button>
-                </div>
-              </div>
-            </div>
+            <div className="mt-4 h-px bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-transparent"></div>
           </div>
 
           {/* Agents Grid */}
           {purchasedAgents.length === 0 ? (
             <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-12 text-center">
-              <div className="text-6xl mb-4">🤖</div>
+              <PackageSearch className="w-16 h-16 text-gray-500 mx-auto mb-4" />
               <h3 className="text-2xl font-bold text-white mb-2">No Agents Yet</h3>
               <p className="text-gray-400 mb-6">Purchase your first AI agent to get started</p>
               <button
                 onClick={() => router.push('/browse')}
-                className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300"
+                className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
               >
                 Browse Agents
               </button>
@@ -408,44 +356,49 @@ function DashboardContent() {
               {purchasedAgents.map((purchasedAgent) => (
                 <div
                   key={purchasedAgent.id}
-                  className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300"
+                  className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:bg-white/10 hover:border-cyan-500/20 hover:shadow-lg hover:shadow-cyan-500/5 transition-all duration-300"
                 >
                   {/* Agent Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-4">
                       <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center">
-                        <span className="text-2xl">🤖</span>
+                        <Bot className="w-7 h-7 text-white" />
                       </div>
                       <div>
                         <h3 className="text-xl font-bold text-white">{purchasedAgent.agent.name}</h3>
-                        <p className="text-sm text-gray-400">{purchasedAgent.agent.category}</p>
+                        <span className="inline-block mt-1 px-2.5 py-0.5 bg-purple-500/20 text-purple-300 text-xs font-medium rounded-full">
+                          {purchasedAgent.agent.category}
+                        </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-400">Cost per run</p>
-                      <p className="text-lg font-bold text-cyan-400">₹{purchasedAgent.agent.credit_cost}</p>
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg">
+                      <Coins className="w-3.5 h-3.5 text-cyan-400" />
+                      <span className="text-sm font-bold text-cyan-400">{purchasedAgent.agent.credit_cost}</span>
+                      <span className="text-xs text-gray-500">/run</span>
                     </div>
                   </div>
 
                   {/* Description */}
-                  <p className="text-sm text-gray-400 mb-4">{purchasedAgent.agent.description}</p>
+                  <p className="text-sm text-gray-400 mb-4 line-clamp-2">{purchasedAgent.agent.description}</p>
 
                   {/* Action Buttons */}
                   <div className="grid grid-cols-1 gap-3">
                     <button
                       onClick={() => handleAgentClick(purchasedAgent)}
-                      className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300"
+                      className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
                     >
-                      🚀 Execute Agent
+                      <Play className="w-4 h-4" />
+                      Execute Agent
                     </button>
 
                     {/* Show Manage Credentials button if agent requires credentials */}
                     {(purchasedAgent.agent.required_platforms?.length ?? 0) > 0 && (
                       <button
                         onClick={() => handleManageCredentialsClick(purchasedAgent)}
-                        className="w-full py-2 bg-white/5 border border-white/10 text-gray-300 rounded-lg hover:bg-white/10 transition-colors text-sm"
+                        className="w-full py-2 bg-white/5 border border-white/10 text-gray-300 rounded-lg hover:bg-white/10 transition-all duration-300 text-sm hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
                       >
-                        🔐 Manage Credentials ({purchasedAgent.agent.required_platforms?.length ?? 0} platforms)
+                        <KeyRound className="w-3.5 h-3.5" />
+                        Manage Credentials ({purchasedAgent.agent.required_platforms?.length ?? 0} platforms)
                       </button>
                     )}
                   </div>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { User } from '@supabase/supabase-js'
 import { useRouter } from 'next/navigation'
+import { Bot } from 'lucide-react'
 import ModernBackground from '@/components/layouts/ModernBackground'
 import ModernHeader from '@/components/layouts/ModernHeader'
 import { useCurrency } from '@/hooks/useCurrency'
@@ -158,8 +159,8 @@ export default function BrowseAgents() {
   }
 
   const categories = ['all', ...new Set(agents.map(agent => agent.category).filter(Boolean))]
-  const filteredAgents = selectedCategory === 'all' 
-    ? agents 
+  const filteredAgents = selectedCategory === 'all'
+    ? agents
     : agents.filter(agent => agent.category === selectedCategory)
 
   const isPurchased = (agentId: string) => {
@@ -172,16 +173,10 @@ export default function BrowseAgents() {
   }
 
   const handlePurchase = (agent: Agent) => {
-    // Get the real-time calculated price for this agent in detected currency
-    const price = agentPrices[agent.id] || agent.credit_cost
-
     if (!user) {
       // Store agent data for after login
       localStorage.setItem('pendingPurchase', JSON.stringify({
         agent_id: agent.id,
-        agent_name: agent.name,
-        credit_cost: price.toString(),
-        currency: currency,
         new_purchase: 'true'
       }))
       router.push('/auth/login?redirect=purchase')
@@ -190,9 +185,6 @@ export default function BrowseAgents() {
 
     const params = new URLSearchParams({
       agent_id: agent.id,
-      agent_name: agent.name,
-      credit_cost: price.toString(),
-      currency: currency,
       new_purchase: 'true'
     })
     router.push(`/purchase?${params.toString()}`)
@@ -229,13 +221,13 @@ export default function BrowseAgents() {
               Browse our marketplace of powerful automation workflows
             </p>
             {/* Currency Indicator */}
-            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-full">
+            {/* <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-full">
               <span className="text-sm text-gray-400">Prices shown in</span>
               <span className="text-sm font-semibold text-cyan-400">
                 {SUPPORTED_CURRENCIES[currency]?.name || currency}
               </span>
               <span className="text-sm text-gray-400">({SUPPORTED_CURRENCIES[currency]?.symbol || currency})</span>
-            </div>
+            </div> */}
           </div>
 
           {/* Category Filter */}
@@ -245,7 +237,7 @@ export default function BrowseAgents() {
                 <button
                   key={category}
                   onClick={() => setSelectedCategory(category)}
-                  className={`px-6 py-2.5 rounded-lg font-medium transition-all duration-300 ${
+                  className={`px-6 py-2.5 rounded-lg font-medium transition-all duration-300 hover:scale-[1.02] ${
                     selectedCategory === category
                       ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-lg shadow-purple-500/50 scale-105'
                       : 'bg-white/5 backdrop-blur-sm border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'
@@ -260,7 +252,7 @@ export default function BrowseAgents() {
           {/* Agents Grid */}
           {filteredAgents.length === 0 ? (
             <div className="text-center py-16">
-              <div className="text-6xl mb-6">🤖</div>
+              <Bot className="w-16 h-16 text-gray-500 mx-auto mb-6" />
               <h3 className="text-2xl font-bold text-white mb-4">No Agents Found</h3>
               <p className="text-gray-400 mb-6">
                 {selectedCategory === 'all'
@@ -314,7 +306,7 @@ function ModernAgentCard({ agent, price, currency, isPurchased, remainingCredits
   const isNew = new Date(agent.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
   return (
-    <div className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300 hover:scale-105 hover:border-purple-500/50 hover:shadow-xl hover:shadow-purple-500/20">
+    <div className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300 hover:scale-[1.02] hover:border-cyan-500/30 hover:shadow-xl hover:shadow-cyan-500/10">
       {/* Status Badges */}
       <div className="absolute top-4 right-4 flex flex-col gap-2">
         {isNew && (
@@ -331,7 +323,7 @@ function ModernAgentCard({ agent, price, currency, isPurchased, remainingCredits
 
       {/* Agent Icon */}
       <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-        <span className="text-2xl">🤖</span>
+        <Bot className="w-7 h-7 text-white" />
       </div>
 
       {/* Category Badge */}
@@ -346,7 +338,7 @@ function ModernAgentCard({ agent, price, currency, isPurchased, remainingCredits
       <p className="text-sm text-gray-400 mb-4 line-clamp-3">{agent.description}</p>
 
       {/* Pricing */}
-      <div className="mb-4 p-4 bg-black/30 border border-white/10 rounded-lg">
+      <div className="mb-4 p-4 bg-white/[0.02] border border-white/10 rounded-lg">
         <div className="flex flex-col gap-1">
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
@@ -354,11 +346,11 @@ function ModernAgentCard({ agent, price, currency, isPurchased, remainingCredits
             </span>
             <span className="text-sm text-gray-400">/ execution</span>
           </div>
-          {currency !== 'INR' && (
+          {/* {currency !== 'INR' && (
             <div className="text-xs text-gray-500">
               ≈ ₹{agent.credit_cost} INR base price
             </div>
-          )}
+          )} */}
         </div>
       </div>
 
@@ -375,7 +367,7 @@ function ModernAgentCard({ agent, price, currency, isPurchased, remainingCredits
       ) : (
         <button
           onClick={onPurchase}
-          className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300"
+          className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
         >
           {isLoggedIn ? 'Purchase Agent' : 'Sign In to Purchase'}
         </button>

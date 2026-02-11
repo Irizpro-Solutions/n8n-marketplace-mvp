@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import Razorpay from 'razorpay';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { supabaseServer } from '@/lib/supabase/server';
 import {
@@ -48,9 +49,8 @@ export const POST = withRateLimit(
       razorpay_payment_id,
       razorpay_signature,
       packageId,
-      amount,
       credits,
-      currency = 'USD',
+      currency = 'INR',
     } = validatedData;
 
     // 2. Authenticate user
@@ -98,16 +98,25 @@ export const POST = withRateLimit(
       user_id: user.id,
     });
 
-    // 4. Handle agent purchase package ID
+    // 4. Fetch verified amount from Razorpay order (never trust client amount)
+    const razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID!,
+      key_secret: process.env.RAZORPAY_KEY_SECRET!,
+    });
+    const order = await razorpay.orders.fetch(razorpay_order_id);
+    const verifiedAmountPaise = order.amount as number;
+    const verifiedAmount = verifiedAmountPaise / PAYMENT.PAISE_MULTIPLIER;
+
+    // 5. Handle agent purchase package ID
     let finalPackageId = packageId;
     let agentId: string | null = null;
 
     if (packageId.startsWith(AGENT.PACKAGE_PREFIX)) {
       agentId = packageId.replace(AGENT.PACKAGE_PREFIX, '');
-      finalPackageId = await getOrCreateDefaultPackage(amount, credits, currency);
+      finalPackageId = await getOrCreateDefaultPackage(verifiedAmount, credits, currency);
     }
 
-    // 5. Process payment atomically (includes idempotency check)
+    // 6. Process payment atomically (includes idempotency check)
     const { data: result, error: rpcError } = await supabaseAdmin.rpc(
       DATABASE.RPC.PROCESS_PAYMENT_ATOMIC,
       {
@@ -116,13 +125,13 @@ export const POST = withRateLimit(
         p_razorpay_order_id: razorpay_order_id,
         p_razorpay_payment_id: razorpay_payment_id,
         p_razorpay_signature: razorpay_signature,
-        p_amount_paid: Math.round(amount * PAYMENT.PAISE_MULTIPLIER),
+        p_amount_paid: verifiedAmountPaise,
         p_credits_purchased: credits,
         p_agent_id: agentId,
       }
     );
 
-    // 6. Check result
+    // 7. Check result
     if (rpcError || !result || !result.success) {
       const errorMessage = rpcError?.message || result?.error || 'Unknown error';
 
@@ -183,7 +192,7 @@ export const POST = withRateLimit(
       throw new PaymentError(errorMessage);
     }
 
-    // 7. Log successful payment
+    // 8. Log successful payment
     console.log('[PAYMENT] Payment processed successfully', {
       payment_id: razorpay_payment_id,
       user_id: user.id,
@@ -192,7 +201,7 @@ export const POST = withRateLimit(
       agent_access: agentId ? 'granted' : 'n/a',
     });
 
-    // 8. Record audit log
+    // 9. Record audit log
     await recordAuditLog({
       userId: user.id,
       action: AUDIT_LOG.ACTION.CREDIT_PURCHASE,
@@ -202,7 +211,7 @@ export const POST = withRateLimit(
         payment_id: razorpay_payment_id,
         order_id: razorpay_order_id,
         credits_purchased: credits,
-        amount_paid: amount,
+        amount_paid: verifiedAmount,
         currency: currency,
         agent_id: agentId,
         new_balance: result.new_balance,
@@ -211,7 +220,7 @@ export const POST = withRateLimit(
       userAgent: req.headers.get('user-agent') || undefined,
     });
 
-    // 9. Return success response
+    // 10. Return success response
     return successResponse(
       {
         success: true,

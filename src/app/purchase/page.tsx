@@ -4,9 +4,11 @@ import { useState, useEffect, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { User } from '@supabase/supabase-js'
+import { Bot, ShieldCheck } from 'lucide-react'
 import ModernBackground from '@/components/layouts/ModernBackground'
 import ModernHeader from '@/components/layouts/ModernHeader'
-import { formatCurrency, SUPPORTED_CURRENCIES } from '@/lib/currency'
+import { formatCurrency, getPriceAsync, type PricingConfig } from '@/lib/currency'
+import { useCurrency } from '@/hooks/useCurrency'
 
 declare global {
   interface Window {
@@ -32,16 +34,17 @@ function LoadingPurchase() {
 function PurchasePageContent() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(false)
-  const [creditAmount, setCreditAmount] = useState(10)
+  const [creditAmount, setCreditAmount] = useState(1)
+  const [agent, setAgent] = useState<{ id: string; name: string; credit_cost: number; pricing_config?: PricingConfig } | null>(null)
+  const [creditCost, setCreditCost] = useState<number>(0)
+  const [agentLoading, setAgentLoading] = useState(true)
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { currency, loading: currencyLoading } = useCurrency()
 
   const agentId = searchParams.get('agent_id') || ''
   const userAgentId = searchParams.get('user_agent_id') || ''
-  const agentName = searchParams.get('agent_name') || 'Unknown Agent'
-  const creditCost = parseFloat(searchParams.get('credit_cost') || '1')
   const isNewPurchase = searchParams.get('new_purchase') === 'true'
-  const currency = searchParams.get('currency') || 'USD'
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -50,7 +53,7 @@ function PurchasePageContent() {
 
   useEffect(() => {
     checkUser()
-    
+
     // Load Razorpay script
     const script = document.createElement('script')
     script.src = 'https://checkout.razorpay.com/v1/checkout.js'
@@ -64,6 +67,38 @@ function PurchasePageContent() {
     }
   }, [])
 
+  // Fetch agent data from API
+  useEffect(() => {
+    if (!agentId) return
+    const loadAgent = async () => {
+      try {
+        setAgentLoading(true)
+        const response = await fetch(`/api/agents/${agentId}`)
+        if (!response.ok) throw new Error('Agent not found')
+        const result = await response.json()
+        if (!result.success || !result.data) throw new Error('Invalid agent data')
+        setAgent(result.data)
+      } catch (error) {
+        console.error('Failed to load agent:', error)
+        router.push('/browse')
+      } finally {
+        setAgentLoading(false)
+      }
+    }
+    loadAgent()
+  }, [agentId, router])
+
+  // Calculate price when agent + currency are ready
+  useEffect(() => {
+    if (!agent || currencyLoading) return
+    const calculatePrice = async () => {
+      const pricingConfig = agent.pricing_config || { basePrice: agent.credit_cost }
+      const price = await getPriceAsync(pricingConfig, currency)
+      setCreditCost(price)
+    }
+    calculatePrice()
+  }, [agent, currency, currencyLoading])
+
   const checkUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
@@ -74,11 +109,12 @@ function PurchasePageContent() {
   }
 
   const totalAmount = creditAmount * creditCost
+  const agentName = agent?.name || 'Loading...'
 
   // Separate async function for payment verification
   const verifyPaymentAsync = async (response: any) => {
     try {
-      console.log('📡 Starting payment verification API call...')
+      console.log('Starting payment verification API call...')
 
       const verifyResponse = await fetch('/api/razorpay/verify-payment', {
         method: 'POST',
@@ -91,45 +127,44 @@ function PurchasePageContent() {
           razorpay_payment_id: response.razorpay_payment_id,
           razorpay_signature: response.razorpay_signature,
           packageId: `agent_${agentId}`,
-          amount: totalAmount,
           credits: creditAmount,
           currency: currency,
         })
       })
 
-      console.log('📡 Verification response status:', verifyResponse.status)
+      console.log('Verification response status:', verifyResponse.status)
 
       let verifyData
       try {
         verifyData = await verifyResponse.json()
-        console.log('📋 Verification response data:', verifyData)
+        console.log('Verification response data:', verifyData)
       } catch (parseError) {
-        console.error('❌ Failed to parse verification response:', parseError)
+        console.error('Failed to parse verification response:', parseError)
         const text = await verifyResponse.text()
-        console.error('❌ Response text:', text.substring(0, 500))
+        console.error('Response text:', text.substring(0, 500))
         throw new Error('Server response was not valid JSON')
       }
 
       if (verifyResponse.ok && verifyData.success) {
-        console.log('✅ Payment verified successfully!')
-        console.log('📊 Credits added:', verifyData.data?.credits_added)
-        console.log('💰 New balance:', verifyData.data?.new_balance)
+        console.log('Payment verified successfully!')
+        console.log('Credits added:', verifyData.data?.credits_added)
+        console.log('New balance:', verifyData.data?.new_balance)
 
-        alert('🎉 Payment successful! Agent purchased successfully. Redirecting to dashboard...')
+        alert('Payment successful! Agent purchased successfully. Redirecting to dashboard...')
 
         // Redirect to dashboard with success parameter
         setTimeout(() => {
-          console.log('🔄 Redirecting to dashboard...')
+          console.log('Redirecting to dashboard...')
           window.location.href = '/dashboard?payment=success'
         }, 1500)
       } else {
-        console.error('❌ Verification failed:', verifyData)
-        alert(`❌ Payment verification failed: ${verifyData.error || 'Unknown error'}. Please contact support with payment ID: ${response.razorpay_payment_id}`)
+        console.error('Verification failed:', verifyData)
+        alert(`Payment verification failed: ${verifyData.error || 'Unknown error'}. Please contact support with payment ID: ${response.razorpay_payment_id}`)
         setLoading(false)
       }
     } catch (verifyError: any) {
-      console.error('❌ Verification error:', verifyError)
-      alert(`❌ Payment verification failed: ${verifyError.message}. Please contact support with payment ID: ${response.razorpay_payment_id}`)
+      console.error('Verification error:', verifyError)
+      alert(`Payment verification failed: ${verifyError.message}. Please contact support with payment ID: ${response.razorpay_payment_id}`)
       setLoading(false)
     }
   }
@@ -141,38 +176,34 @@ function PurchasePageContent() {
     }
 
     setLoading(true)
-    console.log('🚀 Starting payment process...')
+    console.log('Starting payment process...')
 
     try {
-      // Create order first
-      console.log('📦 Creating Razorpay order...')
+      // Create order (server computes amount from agent pricing)
+      console.log('Creating Razorpay order...')
       const orderResponse = await fetch('/api/razorpay/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          packageId: `agent_${agentId}`,
           agentId: agentId,
-          agentName: agentName,
           credits: creditAmount,
-          amount: totalAmount,
           currency: currency,
-          userId: user?.id
         })
       })
 
       const orderData = await orderResponse.json()
-      console.log('📋 Order response:', orderData)
-      
+      console.log('Order response:', orderData)
+
       if (!orderResponse.ok) {
         throw new Error(orderData.error || 'Failed to create order')
       }
 
-      console.log('✅ Order created successfully, opening Razorpay...')
+      console.log('Order created successfully, opening Razorpay...')
 
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-        amount: Math.round(totalAmount * 100), // Amount in paise
-        currency: currency,
+        amount: orderData.amount,       // Server-validated amount in paise
+        currency: orderData.currency,   // Server-validated currency
         name: 'AI Agent Marketplace',
         description: `${creditAmount} credits for ${agentName}`,
         order_id: orderData.orderId,
@@ -188,8 +219,8 @@ function PurchasePageContent() {
         },
         // **CRITICAL FIX** - Synchronous handler for Razorpay success animation
         handler: (response: any) => {
-          console.log('🔥 Payment successful! Handler triggered', response)
-          console.log('📋 Payment response details:', {
+          console.log('Payment successful! Handler triggered', response)
+          console.log('Payment response details:', {
             order_id: response.razorpay_order_id,
             payment_id: response.razorpay_payment_id,
             signature_present: !!response.razorpay_signature
@@ -197,14 +228,14 @@ function PurchasePageContent() {
 
           // Validate response has required fields
           if (!response.razorpay_order_id || !response.razorpay_payment_id || !response.razorpay_signature) {
-            console.error('❌ Invalid payment response from Razorpay', response)
+            console.error('Invalid payment response from Razorpay', response)
             alert('Payment response invalid. Please contact support.')
             setLoading(false)
             return
           }
 
           // Show success message immediately (allows Razorpay animation to complete)
-          console.log('✅ Payment captured by Razorpay, starting verification...')
+          console.log('Payment captured by Razorpay, starting verification...')
 
           // Run verification in background (non-blocking to allow Razorpay animation)
           setTimeout(() => {
@@ -213,7 +244,7 @@ function PurchasePageContent() {
         },
         modal: {
           ondismiss: () => {
-            console.log('❌ Payment modal closed by user')
+            console.log('Payment modal closed by user')
             setLoading(false)
           },
           // Prevent accidental closure during payment
@@ -230,24 +261,24 @@ function PurchasePageContent() {
         }
       }
 
-      console.log('🚀 Opening Razorpay with options:', options)
+      console.log('Opening Razorpay with options:', options)
       const rzp = new window.Razorpay(options)
       rzp.open()
 
     } catch (error) {
-      console.error('❌ Payment initiation failed:', error)
+      console.error('Payment initiation failed:', error)
       alert('Failed to initiate payment. Please try again.')
       setLoading(false)
     }
   }
 
-  if (!user) {
+  if (!user || agentLoading || currencyLoading || !agent) {
     return (
       <ModernBackground>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-white text-lg">Checking authentication...</p>
+            <p className="text-white text-lg">Loading purchase details...</p>
           </div>
         </div>
       </ModernBackground>
@@ -269,11 +300,11 @@ function PurchasePageContent() {
           </div>
 
           {/* Main Purchase Card */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 mb-6">
+          <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-8 mb-6 shadow-xl shadow-purple-500/5">
             {/* Agent Header */}
             <div className="flex items-center mb-6 pb-6 border-b border-white/10">
               <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center mr-4">
-                <span className="text-2xl">🤖</span>
+                <Bot className="w-7 h-7 text-white" />
               </div>
               <div>
                 <h2 className="text-xl font-bold text-white">{agentName}</h2>
@@ -294,9 +325,9 @@ function PurchasePageContent() {
                 <span className="text-gray-400 font-medium">Credits to Purchase:</span>
                 <div className="flex items-center gap-4">
                   <button
-                    onClick={() => setCreditAmount(Math.max(1, creditAmount - 10))}
+                    onClick={() => setCreditAmount(Math.max(1, creditAmount - 1))}
                     className="w-10 h-10 bg-white/5 border border-white/10 text-white rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
-                    disabled={loading}
+                    disabled={loading || creditAmount <= 1}
                   >
                     −
                   </button>
@@ -304,9 +335,9 @@ function PurchasePageContent() {
                     {creditAmount}
                   </span>
                   <button
-                    onClick={() => setCreditAmount(creditAmount + 10)}
+                    onClick={() => setCreditAmount(Math.min(30, creditAmount + 1))}
                     className="w-10 h-10 bg-white/5 border border-white/10 text-white rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
-                    disabled={loading}
+                    disabled={loading || creditAmount >= 30}
                   >
                     +
                   </button>
@@ -325,7 +356,7 @@ function PurchasePageContent() {
             <div className="mb-8">
               <h3 className="text-sm text-gray-400 mb-3">Quick Select:</h3>
               <div className="grid grid-cols-3 gap-3">
-                {[10, 50, 100].map(amount => (
+                {[5, 10, 15, 20, 25, 30].map(amount => (
                   <button
                     key={amount}
                     onClick={() => setCreditAmount(amount)}
@@ -345,8 +376,8 @@ function PurchasePageContent() {
             {/* Payment Button */}
             <button
               onClick={handlePayment}
-              disabled={loading}
-              className="w-full py-4 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold text-lg rounded-lg hover:shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading || creditCost <= 0}
+              className="w-full py-4 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold text-lg rounded-lg hover:shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99]"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -364,9 +395,7 @@ function PurchasePageContent() {
             {/* Security Notice */}
             <div className="mt-6 p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
               <p className="text-green-200 text-sm flex items-center justify-center gap-2">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
+                <ShieldCheck className="w-5 h-5" />
                 Secure payment powered by Razorpay
               </p>
             </div>

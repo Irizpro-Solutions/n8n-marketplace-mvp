@@ -73,3 +73,5 @@ supabase/migrations/QUICK_START.md
 docs/n8n-response-formats.md
 N8N_WEBHOOK_SETUP.md
 RAZORPAY_HANDLER_FIX.md
+nul
+MULTI_CURRENCY_BUG_FIX.md

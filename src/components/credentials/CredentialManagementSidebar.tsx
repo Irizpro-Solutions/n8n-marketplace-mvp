@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Check, AlertCircle, RefreshCw, Unplug, Plus } from 'lucide-react';
+import { X, Check, AlertCircle, RefreshCw, Unplug, Plus, KeyRound } from 'lucide-react';
 import PlatformCredentialsForm from './PlatformCredentialsForm';
 
 interface PlatformStatus {
@@ -187,13 +187,14 @@ export default function CredentialManagementSidebar({
       />
 
       {/* Sidebar */}
-      <div className="fixed right-0 top-0 bottom-0 w-full md:w-[500px] bg-gradient-to-br from-gray-900 to-black border-l border-white/10 z-50 overflow-y-auto">
+      <div className="fixed right-0 top-0 bottom-0 w-full md:w-[500px] bg-slate-950/95 backdrop-blur-xl border-l border-white/10 z-50 overflow-y-auto">
         <div className="p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-white mb-1">
-                🔐 Credential Manager
+              <h2 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
+                <KeyRound className="w-6 h-6 text-cyan-400" />
+                Credential Manager
               </h2>
               <p className="text-sm text-gray-400">{agentName}</p>
             </div>
