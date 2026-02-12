@@ -141,14 +141,16 @@
   animation: pulse-glow 2s infinite;
 }
 
-/* Landing page animations */
-@keyframes blob {
-  0% { transform: translate(0px, 0px) scale(1); }
-  33% { transform: translate(30px, -50px) scale(1.1); }
-  66% { transform: translate(-20px, 20px) scale(0.9); }
-  100% { transform: translate(0px, 0px) scale(1); }
+/* Aurora gradient drift for background */
+@keyframes aurora-drift {
+  0% { background-position: 0% 0%; }
+  25% { background-position: 100% 50%; }
+  50% { background-position: 50% 100%; }
+  75% { background-position: 0% 50%; }
+  100% { background-position: 0% 0%; }
 }
 
+/* Landing page animations */
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -163,18 +165,6 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.animate-blob {
-  animation: blob 7s infinite;
-}
-
-.animation-delay-2000 {
-  animation-delay: 2s;
-}
-
-.animation-delay-4000 {
-  animation-delay: 4s;
 }
 
 .animate-fade-in {
@@ -219,7 +209,7 @@ select {
 
 /* Dropdown options styling - Dark background with white text */
 select option {
-  background-color: #1a1625 !important;
+  background-color: #0F172A !important;
   color: white !important;
   padding: 8px 12px;
   font-weight: 500;
@@ -228,22 +218,22 @@ select option {
 /* Hover and focus states */
 select option:hover,
 select option:focus {
-  background-color: #8B5CF6 !important;
-  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%) !important;
+  background-color: #3B82F6 !important;
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%) !important;
   color: white !important;
 }
 
 /* Checked/selected option */
 select option:checked {
-  background-color: #7C3AED !important;
-  background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%) !important;
+  background-color: #2563EB !important;
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
   color: white !important;
   font-weight: 600;
 }
 
 /* Disabled options */
 select option:disabled {
-  background-color: #2D2640 !important;
+  background-color: #1E293B !important;
   color: #6B7280 !important;
   cursor: not-allowed;
 }
@@ -251,19 +241,19 @@ select option:disabled {
 /* Firefox specific fixes */
 @-moz-document url-prefix() {
   select option {
-    background-color: #1a1625;
+    background-color: #0F172A;
     color: white;
   }
 
   select option:hover {
-    background-color: #8B5CF6;
+    background-color: #3B82F6;
   }
 }
 
 /* Chrome/Safari specific fixes */
 @supports (-webkit-appearance: none) {
   select option {
-    background-color: #1a1625;
+    background-color: #0F172A;
     color: white;
   }
 }
@@ -279,7 +269,7 @@ dialog select {
 [role="dialog"] select option,
 .Dialog select option,
 dialog select option {
-  background-color: #1a1625 !important;
+  background-color: #0F172A !important;
   color: white !important;
   padding: 10px 12px;
   min-height: 40px;
@@ -288,16 +278,16 @@ dialog select option {
 
 /* Ensure dropdown menu has dark background (browser-specific) */
 select::-webkit-dropdown-menu {
-  background-color: #1a1625;
+  background-color: #0F172A;
 }
 
 /* Additional fallback for problematic browsers */
 select[class*="text-white"] option {
-  background-color: #1a1625 !important;
+  background-color: #0F172A !important;
   color: white !important;
 }
 
 select[class*="bg-white"] option {
-  background-color: #1a1625 !important;
+  background-color: #0F172A !important;
   color: white !important;
 }

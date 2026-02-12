@@ -83,7 +83,7 @@ function ResetPasswordContent() {
       <ModernBackground>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-white text-lg">Validating reset link...</p>
           </div>
         </div>
@@ -98,7 +98,7 @@ function ResetPasswordContent() {
           {/* Logo/Header */}
           <div className="text-center mb-8">
             <Link href="/" className="inline-flex items-center gap-2 group mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                 <svg
                   className="w-7 h-7 text-white"
                   fill="none"
@@ -124,13 +124,13 @@ function ResetPasswordContent() {
           </div>
 
           {/* Form Card */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl shadow-purple-500/5">
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl shadow-blue-500/5">
             {error && (
-              <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg">
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
                 <p className="text-red-200 text-sm">{error}</p>
                 {error.includes('Invalid') && (
                   <p className="text-xs mt-2">
-                    <Link href="/auth/reset" className="text-cyan-400 hover:text-cyan-300 transition-colors">
+                    <Link href="/auth/reset" className="text-blue-400 hover:text-blue-300 transition-colors">
                       Request a new reset link
                     </Link>
                   </p>
@@ -145,7 +145,7 @@ function ResetPasswordContent() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-transparent transition-all"
                   placeholder="Enter new password (min 6 characters)"
                   minLength={6}
                   required
@@ -158,7 +158,7 @@ function ResetPasswordContent() {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-transparent transition-all"
                   placeholder="Confirm new password"
                   minLength={6}
                   required
@@ -192,14 +192,14 @@ function ResetPasswordContent() {
               <button
                 type="submit"
                 disabled={loading || !password || !confirmPassword}
-                className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Updating Password...' : 'Update Password'}
               </button>
             </form>
 
             <div className="mt-6 text-center text-sm">
-              <Link href="/auth/login" className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors">
+              <Link href="/auth/login" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
                 Back to Login
               </Link>
             </div>
@@ -216,7 +216,7 @@ export default function ResetPasswordPage() {
       <ModernBackground>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-white text-lg">Loading...</p>
           </div>
         </div>

@@ -306,7 +306,7 @@ function DashboardContent() {
       <ModernBackground>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-white text-lg">Loading dashboard...</p>
           </div>
         </div>
@@ -335,7 +335,7 @@ function DashboardContent() {
                 ? 'All agents available • Unlimited executions • No credit cost'
                 : 'Manage and execute your AI agents'}
             </p>
-            <div className="mt-4 h-px bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-transparent"></div>
+            <div className="mt-4 h-px bg-white/[0.06]"></div>
           </div>
 
           {/* Agents Grid */}
@@ -346,7 +346,7 @@ function DashboardContent() {
               <p className="text-gray-400 mb-6">Purchase your first AI agent to get started</p>
               <button
                 onClick={() => router.push('/browse')}
-                className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
               >
                 Browse Agents
               </button>
@@ -356,24 +356,24 @@ function DashboardContent() {
               {purchasedAgents.map((purchasedAgent) => (
                 <div
                   key={purchasedAgent.id}
-                  className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:bg-white/10 hover:border-cyan-500/20 hover:shadow-lg hover:shadow-cyan-500/5 transition-all duration-300"
+                  className="bg-white/[0.06] border border-white/[0.08] rounded-2xl p-6 hover:bg-white/10 hover:border-white/[0.15] hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300"
                 >
                   {/* Agent Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center">
+                      <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-violet-600 rounded-xl flex items-center justify-center">
                         <Bot className="w-7 h-7 text-white" />
                       </div>
                       <div>
                         <h3 className="text-xl font-bold text-white">{purchasedAgent.agent.name}</h3>
-                        <span className="inline-block mt-1 px-2.5 py-0.5 bg-purple-500/20 text-purple-300 text-xs font-medium rounded-full">
+                        <span className="inline-block mt-1 px-2.5 py-0.5 bg-blue-500/10 text-blue-300 text-xs font-medium rounded-full">
                           {purchasedAgent.agent.category}
                         </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg">
-                      <Coins className="w-3.5 h-3.5 text-cyan-400" />
-                      <span className="text-sm font-bold text-cyan-400">{purchasedAgent.agent.credit_cost}</span>
+                      <Coins className="w-3.5 h-3.5 text-blue-400" />
+                      <span className="text-sm font-bold text-blue-400">{purchasedAgent.agent.credit_cost}</span>
                       <span className="text-xs text-gray-500">/run</span>
                     </div>
                   </div>
@@ -385,7 +385,7 @@ function DashboardContent() {
                   <div className="grid grid-cols-1 gap-3">
                     <button
                       onClick={() => handleAgentClick(purchasedAgent)}
-                      className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
                     >
                       <Play className="w-4 h-4" />
                       Execute Agent
@@ -454,7 +454,7 @@ export default function Dashboard() {
       <ModernBackground>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-white text-lg">Loading dashboard...</p>
           </div>
         </div>

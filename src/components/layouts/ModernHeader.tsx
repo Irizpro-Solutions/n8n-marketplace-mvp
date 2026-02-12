@@ -40,7 +40,7 @@ export default function ModernHeader({ user, credits }: ModernHeaderProps) {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? "bg-slate-950/90 backdrop-blur-md border-b border-white/10"
+          ? "bg-[#0F172A]/95 backdrop-blur-md border-b border-white/10"
           : "bg-transparent"
       }`}
     >
@@ -48,7 +48,7 @@ export default function ModernHeader({ user, credits }: ModernHeaderProps) {
         <div className="flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
               <svg
                 className="w-6 h-6 text-white"
                 fill="none"
@@ -80,7 +80,7 @@ export default function ModernHeader({ user, credits }: ModernHeaderProps) {
               >
                 {link.label}
                 {pathname === link.href && (
-                  <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-400 to-purple-500 rounded-full" />
+                  <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 rounded-full" />
                 )}
               </Link>
             ))}
@@ -93,7 +93,7 @@ export default function ModernHeader({ user, credits }: ModernHeaderProps) {
                 {/* Credits display */}
                 {credits !== undefined && (
                   <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg">
-                    <Coins className="w-4 h-4 text-cyan-400" />
+                    <Coins className="w-4 h-4 text-blue-400" />
                     <span className="text-sm font-medium text-white">
                       {credits} credits
                     </span>
@@ -102,7 +102,7 @@ export default function ModernHeader({ user, credits }: ModernHeaderProps) {
 
                 {/* User menu */}
                 <div className="hidden md:flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-full flex items-center justify-center">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-violet-600 rounded-full flex items-center justify-center">
                     <span className="text-xs font-bold text-white">
                       {user.email?.[0]?.toUpperCase() || "U"}
                     </span>
@@ -140,7 +140,7 @@ export default function ModernHeader({ user, credits }: ModernHeaderProps) {
                 </Link>
                 <Link
                   href="/auth/signup"
-                  className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 font-medium hover:scale-105"
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 font-medium hover:scale-105"
                 >
                   Get Started
                 </Link>
@@ -163,7 +163,7 @@ export default function ModernHeader({ user, credits }: ModernHeaderProps) {
 
         {/* Mobile dropdown menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden mt-4 pb-4 border-t border-white/10 pt-4 bg-slate-950/95 backdrop-blur-md rounded-lg -mx-2 px-4">
+          <div className="md:hidden mt-4 pb-4 border-t border-white/10 pt-4 bg-[#0F172A]/98 backdrop-blur-md rounded-lg -mx-2 px-4">
             <nav className="flex flex-col gap-3">
               {navLinks.map((link) => (
                 <Link

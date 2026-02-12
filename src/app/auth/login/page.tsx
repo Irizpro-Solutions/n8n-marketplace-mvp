@@ -69,7 +69,7 @@ function LoginContent() {
           {/* Logo/Header */}
           <div className="text-center mb-8">
             <Link href="/" className="inline-flex items-center gap-2 group mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                 <svg
                   className="w-7 h-7 text-white"
                   fill="none"
@@ -95,10 +95,10 @@ function LoginContent() {
           </div>
 
           {/* Form Card */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl shadow-purple-500/5">
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl shadow-blue-500/5">
             {redirectType === 'purchase' && (
-              <div className="mb-6 p-4 bg-cyan-500/20 border border-cyan-500/50 rounded-lg">
-                <p className="text-cyan-200 text-sm flex items-center gap-2">
+              <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <p className="text-blue-200 text-sm flex items-center gap-2">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
@@ -108,7 +108,7 @@ function LoginContent() {
             )}
 
             {error && (
-              <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg">
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
                 <p className="text-red-200 text-sm">{error}</p>
               </div>
             )}
@@ -122,7 +122,7 @@ function LoginContent() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-transparent transition-all"
                   placeholder="you@example.com"
                   required
                 />
@@ -136,7 +136,7 @@ function LoginContent() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-transparent transition-all"
                   placeholder="••••••••"
                   required
                 />
@@ -145,7 +145,7 @@ function LoginContent() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Signing In...' : 'Sign In'}
               </button>
@@ -156,7 +156,7 @@ function LoginContent() {
                 Don't have an account?{' '}
                 <Link
                   href={`/auth/signup${redirectType ? `?redirect=${redirectType}` : ''}`}
-                  className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+                  className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
                 >
                   Create account
                 </Link>
@@ -166,7 +166,7 @@ function LoginContent() {
                 Forgot your password?{' '}
                 <Link
                   href="/auth/reset"
-                  className="text-purple-400 hover:text-purple-300 font-medium transition-colors"
+                  className="text-violet-400 hover:text-violet-300 font-medium transition-colors"
                 >
                   Reset password
                 </Link>
@@ -185,7 +185,7 @@ export default function LoginPage() {
       <ModernBackground>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-white text-lg">Loading...</p>
           </div>
         </div>

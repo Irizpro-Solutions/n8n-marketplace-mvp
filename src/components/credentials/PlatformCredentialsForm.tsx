@@ -154,7 +154,7 @@ export default function PlatformCredentialsForm({
   if (loading) {
     return (
       <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 text-center">
-        <Loader2 className="animate-spin h-8 w-8 mx-auto text-cyan-400 mb-4" />
+        <Loader2 className="animate-spin h-8 w-8 mx-auto text-blue-500 mb-4" />
         <p className="text-gray-400">Loading credential forms...</p>
       </div>
     );
@@ -176,13 +176,13 @@ export default function PlatformCredentialsForm({
           <span>
             Platform {currentPlatformIndex + 1} of {platforms.length}
           </span>
-          <span className="text-cyan-400">
+          <span className="text-blue-400">
             {Math.round(((currentPlatformIndex + 1) / platforms.length) * 100)}% Complete
           </span>
         </div>
         <div className="w-full bg-white/10 rounded-full h-2">
           <div
-            className="bg-gradient-to-r from-cyan-500 to-purple-600 h-2 rounded-full transition-all duration-300"
+            className="bg-gradient-to-r from-blue-500 to-violet-500 h-2 rounded-full transition-all duration-300"
             style={{
               width: `${((currentPlatformIndex + 1) / platforms.length) * 100}%`,
             }}
@@ -196,7 +196,7 @@ export default function PlatformCredentialsForm({
           🔐 Configure {currentPlatform.platform_name}
         </h3>
         <p className="text-gray-400 mb-1">
-          Setting up credentials for <span className="text-cyan-400">{agentName}</span>
+          Setting up credentials for <span className="text-blue-400">{agentName}</span>
         </p>
         {currentPlatform.description && (
           <p className="text-sm text-gray-500">{currentPlatform.description}</p>
@@ -238,7 +238,7 @@ export default function PlatformCredentialsForm({
                 })
               }
               placeholder={field.placeholder}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
               required={field.required}
             />
           </div>
@@ -260,7 +260,7 @@ export default function PlatformCredentialsForm({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? (
             <span className="flex items-center justify-center space-x-2">

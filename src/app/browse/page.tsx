@@ -195,7 +195,7 @@ export default function BrowseAgents() {
       <ModernBackground>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <div className="text-xl text-white font-medium">
               {loading ? 'Loading agents...' : 'Detecting your currency...'}
             </div>
@@ -239,7 +239,7 @@ export default function BrowseAgents() {
                   onClick={() => setSelectedCategory(category)}
                   className={`px-6 py-2.5 rounded-lg font-medium transition-all duration-300 hover:scale-[1.02] ${
                     selectedCategory === category
-                      ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-lg shadow-purple-500/50 scale-105'
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 scale-105'
                       : 'bg-white/5 backdrop-blur-sm border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'
                   }`}
                 >
@@ -264,7 +264,7 @@ export default function BrowseAgents() {
               {selectedCategory !== 'all' && (
                 <button
                   onClick={() => setSelectedCategory('all')}
-                  className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300"
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300"
                 >
                   View All Categories
                 </button>
@@ -306,11 +306,11 @@ function ModernAgentCard({ agent, price, currency, isPurchased, remainingCredits
   const isNew = new Date(agent.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
   return (
-    <div className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300 hover:scale-[1.02] hover:border-cyan-500/30 hover:shadow-xl hover:shadow-cyan-500/10">
+    <div className="group relative bg-white/[0.06] border border-white/[0.08] rounded-2xl p-6 hover:bg-white/10 transition-all duration-300 hover:scale-[1.02] hover:border-white/[0.15] hover:shadow-xl hover:shadow-blue-500/5">
       {/* Status Badges */}
       <div className="absolute top-4 right-4 flex flex-col gap-2">
         {isNew && (
-          <div className="px-3 py-1 bg-gradient-to-r from-cyan-500 to-purple-600 text-white text-xs font-bold rounded-full">
+          <div className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-full">
             New
           </div>
         )}
@@ -322,12 +322,12 @@ function ModernAgentCard({ agent, price, currency, isPurchased, remainingCredits
       </div>
 
       {/* Agent Icon */}
-      <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+      <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-violet-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
         <Bot className="w-7 h-7 text-white" />
       </div>
 
       {/* Category Badge */}
-      <div className="inline-block px-3 py-1 bg-purple-500/20 text-purple-300 text-xs font-medium rounded-full mb-3">
+      <div className="inline-block px-3 py-1 bg-blue-500/10 text-blue-300 text-xs font-medium rounded-full mb-3">
         {agent.category}
       </div>
 
@@ -341,7 +341,7 @@ function ModernAgentCard({ agent, price, currency, isPurchased, remainingCredits
       <div className="mb-4 p-4 bg-white/[0.02] border border-white/10 rounded-lg">
         <div className="flex flex-col gap-1">
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+            <span className="text-3xl fo  b  nt-bold bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
               {formatCurrency(price, currency)}
             </span>
             <span className="text-sm text-gray-400">/ execution</span>
@@ -367,7 +367,7 @@ function ModernAgentCard({ agent, price, currency, isPurchased, remainingCredits
       ) : (
         <button
           onClick={onPurchase}
-          className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+          className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
         >
           {isLoggedIn ? 'Purchase Agent' : 'Sign In to Purchase'}
         </button>

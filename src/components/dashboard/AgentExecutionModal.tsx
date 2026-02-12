@@ -70,11 +70,11 @@ export default function AgentExecutionModal({
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-5xl transform overflow-hidden rounded-2xl bg-slate-950/95 backdrop-blur-xl border border-white/10 shadow-2xl transition-all">
+                <Dialog.Panel className="w-full max-w-5xl transform overflow-hidden rounded-2xl bg-[#0F172A]/98 backdrop-blur-xl border border-white/10 shadow-2xl transition-all">
                   {/* Header */}
-                  <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-cyan-900/10 to-purple-900/10 px-6 py-4">
+                  <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.02] px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center text-2xl">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-2xl">
                         {agent.icon_url || '🤖'}
                       </div>
                       <div>
@@ -142,14 +142,14 @@ export default function AgentExecutionModal({
                                       onChange={(e) => handleInputChange(field.name, e.target.value)}
                                       placeholder={field.placeholder || field.label}
                                       required={field.required}
-                                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 min-h-[100px]"
+                                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 min-h-[100px]"
                                     />
                                   ) : field.type === 'select' ? (
                                     <select
                                       value={inputs[field.name] || ''}
                                       onChange={(e) => handleInputChange(field.name, e.target.value)}
                                       required={field.required}
-                                      className="w-full px-4 py-3 bg-white/5 border border-purple-500/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                                       style={{
                                         backgroundColor: 'rgba(255, 255, 255, 0.05)',
                                         color: 'white'
@@ -179,7 +179,7 @@ export default function AgentExecutionModal({
                                       onChange={(e) => handleInputChange(field.name, e.target.value)}
                                       placeholder={field.placeholder || field.label}
                                       required={field.required}
-                                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                                      className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                                     />
                                   )}
                                 </div>
@@ -204,7 +204,7 @@ export default function AgentExecutionModal({
                       {executionResult ? (
                         <span className="text-green-400">✓ Execution Complete</span>
                       ) : agent.credit_cost > 0 ? (
-                        <span>Cost: <span className="text-cyan-400 font-semibold">{agent.credit_cost}</span> credits per run</span>
+                        <span>Cost: <span className="text-blue-400 font-semibold">{agent.credit_cost}</span> credits per run</span>
                       ) : (
                         <span className="text-green-400">Free for Admin</span>
                       )}
@@ -220,7 +220,7 @@ export default function AgentExecutionModal({
                         <button
                           onClick={handleExecute}
                           disabled={executing || !hasCredentials}
-                          className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-600 hover:to-purple-700 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
+                          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
                         >
                           {executing ? (
                             <>

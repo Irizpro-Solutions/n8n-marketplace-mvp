@@ -97,6 +97,9 @@ export default function CreditsPageClient({
       <div className="grid gap-6 md:grid-cols-3 max-w-5xl">
         {creditPackages.map((pkg) => (
           <div
+
+
+          
             key={pkg.id}
             className="rounded-2xl bg-slate-900 border border-slate-800 p-6 flex flex-col justify-between shadow-lg"
           >

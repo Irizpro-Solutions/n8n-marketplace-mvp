@@ -187,13 +187,13 @@ export default function CredentialManagementSidebar({
       />
 
       {/* Sidebar */}
-      <div className="fixed right-0 top-0 bottom-0 w-full md:w-[500px] bg-slate-950/95 backdrop-blur-xl border-l border-white/10 z-50 overflow-y-auto">
+      <div className="fixed right-0 top-0 bottom-0 w-full md:w-[500px] bg-[#0F172A]/98 backdrop-blur-xl border-l border-white/10 z-50 overflow-y-auto">
         <div className="p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
-                <KeyRound className="w-6 h-6 text-cyan-400" />
+                <KeyRound className="w-6 h-6 text-blue-400" />
                 Credential Manager
               </h2>
               <p className="text-sm text-gray-400">{agentName}</p>
@@ -214,7 +214,7 @@ export default function CredentialManagementSidebar({
                   setShowCredentialForm(false);
                   setSelectedPlatform(null);
                 }}
-                className="mb-4 text-cyan-400 hover:text-cyan-300 text-sm flex items-center gap-2"
+                className="mb-4 text-blue-400 hover:text-blue-300 text-sm flex items-center gap-2"
               >
                 ← Back to credential list
               </button>
@@ -234,7 +234,7 @@ export default function CredentialManagementSidebar({
               {/* Loading State */}
               {loading ? (
                 <div className="text-center py-12">
-                  <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                   <p className="text-gray-400">Loading credentials...</p>
                 </div>
               ) : (
@@ -268,7 +268,7 @@ export default function CredentialManagementSidebar({
                             <div className="flex gap-2">
                               <button
                                 onClick={() => handleUpdate(platform.slug)}
-                                className="flex-1 px-3 py-2 bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 rounded-lg hover:bg-cyan-500/30 transition-colors text-sm flex items-center justify-center gap-2"
+                                className="flex-1 px-3 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/20 transition-colors text-sm flex items-center justify-center gap-2"
                               >
                                 <RefreshCw className="w-4 h-4" />
                                 Update
@@ -310,7 +310,7 @@ export default function CredentialManagementSidebar({
                             </div>
                             <button
                               onClick={() => handleConnect(platform.slug)}
-                              className="w-full px-4 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 flex items-center justify-center gap-2"
+                              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 flex items-center justify-center gap-2"
                             >
                               <Plus className="w-4 h-4" />
                               Connect {platform.name}

@@ -49,7 +49,7 @@ export default function ResetPasswordPage() {
           {/* Logo/Header */}
           <div className="text-center mb-8">
             <Link href="/" className="inline-flex items-center gap-2 group mb-6">
-              <div className="w-12 h-12 bg-gradient-to-br from-cyan-400 to-purple-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                 <svg
                   className="w-7 h-7 text-white"
                   fill="none"
@@ -75,15 +75,15 @@ export default function ResetPasswordPage() {
           </div>
 
           {/* Form Card */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl shadow-purple-500/5">
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl shadow-blue-500/5">
             {error && (
-              <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-lg">
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
                 <p className="text-red-200 text-sm">{error}</p>
               </div>
             )}
 
             {message && (
-              <div className="mb-6 p-4 bg-green-500/20 border border-green-500/50 rounded-lg">
+              <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
                 <p className="text-green-200 text-sm flex items-center gap-2">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -105,7 +105,7 @@ export default function ResetPasswordPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-transparent transition-all"
                   placeholder="you@example.com"
                   required
                 />
@@ -114,7 +114,7 @@ export default function ResetPasswordPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-purple-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Sending Reset Link...' : 'Send Reset Link'}
               </button>
@@ -125,7 +125,7 @@ export default function ResetPasswordPage() {
                 Remember your password?{' '}
                 <Link
                   href="/auth/login"
-                  className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+                  className="text-blue-400 hover:text-blue-300 font-medium transition-colors"
                 >
                   Back to Login
                 </Link>
@@ -135,7 +135,7 @@ export default function ResetPasswordPage() {
                 Don't have an account?{' '}
                 <Link
                   href="/auth/signup"
-                  className="text-purple-400 hover:text-purple-300 font-medium transition-colors"
+                  className="text-violet-400 hover:text-violet-300 font-medium transition-colors"
                 >
                   Create account
                 </Link>

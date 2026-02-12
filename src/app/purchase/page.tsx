@@ -22,7 +22,7 @@ function LoadingPurchase() {
     <ModernBackground>
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-white text-lg">Loading purchase...</p>
         </div>
       </div>
@@ -252,7 +252,7 @@ function PurchasePageContent() {
           backdropclose: false,
         },
         theme: {
-          color: '#8B5CF6'
+          color: '#3B82F6'
         },
         // Retry configuration
         retry: {
@@ -277,7 +277,7 @@ function PurchasePageContent() {
       <ModernBackground>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-white text-lg">Loading purchase details...</p>
           </div>
         </div>
@@ -300,10 +300,10 @@ function PurchasePageContent() {
           </div>
 
           {/* Main Purchase Card */}
-          <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-8 mb-6 shadow-xl shadow-purple-500/5">
+          <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-8 mb-6 shadow-xl shadow-blue-500/5">
             {/* Agent Header */}
             <div className="flex items-center mb-6 pb-6 border-b border-white/10">
-              <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center mr-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-violet-600 rounded-xl flex items-center justify-center mr-4">
                 <Bot className="w-7 h-7 text-white" />
               </div>
               <div>
@@ -318,7 +318,7 @@ function PurchasePageContent() {
             <div className="space-y-6 mb-8">
               <div className="flex justify-between items-center">
                 <span className="text-gray-400">Cost per Credit:</span>
-                <span className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">{formatCurrency(creditCost, currency)}</span>
+                <span className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">{formatCurrency(creditCost, currency)}</span>
               </div>
 
               <div className="flex justify-between items-center">
@@ -347,7 +347,7 @@ function PurchasePageContent() {
               <div className="border-t border-white/10 pt-6">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 text-lg">Total Amount:</span>
-                  <span className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">{formatCurrency(totalAmount, currency)}</span>
+                  <span className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">{formatCurrency(totalAmount, currency)}</span>
                 </div>
               </div>
             </div>
@@ -362,7 +362,7 @@ function PurchasePageContent() {
                     onClick={() => setCreditAmount(amount)}
                     className={`py-3 px-4 rounded-lg font-semibold transition-all ${
                       creditAmount === amount
-                        ? 'bg-gradient-to-r from-cyan-500 to-purple-600 text-white shadow-lg shadow-purple-500/50'
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
                         : 'bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
                     }`}
                     disabled={loading}
@@ -377,7 +377,7 @@ function PurchasePageContent() {
             <button
               onClick={handlePayment}
               disabled={loading || creditCost <= 0}
-              className="w-full py-4 bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold text-lg rounded-lg hover:shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99]"
+              className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg rounded-lg hover:shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99]"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">

@@ -1,40 +1,49 @@
 "use client";
 
-import { useEffect, useState, ReactNode } from "react";
+import { ReactNode } from "react";
+import NeuralGrid from "./NeuralGrid";
 
 interface ModernBackgroundProps {
   children: ReactNode;
+  /** "landing" = slightly more visible effects, "dashboard" = very faint */
+  variant?: "landing" | "dashboard";
 }
 
-export default function ModernBackground({ children }: ModernBackgroundProps) {
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
-  }, []);
+export default function ModernBackground({
+  children,
+  variant = "dashboard",
+}: ModernBackgroundProps) {
+  // TUNING: Aurora gradient visibility — landing vs dashboard
+  const auroraOpacity = variant === "landing" ? "opacity-[0.35]" : "opacity-[0.10]";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 relative">
-      {/* Animated gradient orbs */}
-      <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
-      <div className="absolute top-0 -right-4 w-72 h-72 bg-cyan-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-2000"></div>
-      <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000"></div>
+    <div className="min-h-screen bg-[#0F172A] relative overflow-hidden">
+      {/* Secondary layer: subtle radial gradient for depth */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,#111827,transparent_70%)]" />
 
-      {/* Grid background */}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:100px_100px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_50%,#000_70%,transparent_100%)]"></div>
-
-      {/* Spotlight effect following mouse */}
+      {/* Subtle noise texture for depth — TUNING: opacity controls grain visibility */}
       <div
-        className="absolute inset-0 opacity-30 pointer-events-none transition-opacity duration-300"
+        className="absolute inset-0 opacity-[0.04]"
         style={{
-          background: `radial-gradient(600px at ${mousePosition.x}px ${mousePosition.y}px, rgba(99, 102, 241, 0.15), transparent 80%)`,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`,
+          backgroundRepeat: "repeat",
+          backgroundSize: "256px 256px",
         }}
-      ></div>
+      />
+
+      {/* Aurora gradient layer: very slow moving */}
+      <div
+        className={`absolute inset-0 ${auroraOpacity}`}
+        style={{
+          background:
+            "linear-gradient(135deg, rgba(59,130,246,0.6) 0%, rgba(139,92,246,0.4) 40%, rgba(250,204,21,0.08) 70%, rgba(59,130,246,0.5) 100%)",
+          backgroundSize: "400% 400%",
+          animation: "aurora-drift 15s ease-in-out infinite",
+        }}
+      />
+
+      {/* Neural grid canvas */}
+      <NeuralGrid variant={variant} />
 
       {/* Content */}
       <div className="relative z-10">{children}</div>
